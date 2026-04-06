@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlastOff</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-logo">BlastOff</div>
+    <div class="nav-links">
+      <a class="nav-link is-active" data-view="home">Launch</a>
+      <a class="nav-link" data-view="products">Products</a>
+      <a class="nav-link" data-view="directories">Directories</a>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- HOME: Extract URL -->
+    <div id="view-home" class="view is-active">
+      <div class="hero">
+        <h1>Prep your launch</h1>
+        <p>Paste a URL. We extract everything directories need. You review, then submit.</p>
+        <form class="extract-form" id="extract-form">
+          <input type="url" class="extract-input" id="url-input" placeholder="https://yourproduct.com" required>
+          <button type="submit" class="btn btn-primary" id="extract-btn">Extract</button>
+        </form>
+      </div>
+
+      <!-- Extracted product (hidden until extraction) -->
+      <div id="extracted-product" style="display: none;">
+        <div class="product-card">
+          <div class="product-header">
+            <div id="product-logo-container"></div>
+            <div class="product-info">
+              <h2 id="product-display-name">Product Name</h2>
+              <div class="tagline" id="product-display-tagline">Tagline</div>
+              <a class="product-url" id="product-display-url" href="#" target="_blank"></a>
+            </div>
+          </div>
+
+          <div class="field-grid">
+            <div class="field-group">
+              <label class="field-label">Name</label>
+              <input type="text" class="field-input" data-field="name">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Tagline (60 chars)</label>
+              <input type="text" class="field-input" data-field="tagline" maxlength="60">
+            </div>
+            <div class="field-group full-width">
+              <label class="field-label">Short Description</label>
+              <textarea class="field-textarea" data-field="description" rows="2"></textarea>
+            </div>
+            <div class="field-group full-width">
+              <label class="field-label">Long Description</label>
+              <textarea class="field-textarea" data-field="long_description" rows="4"></textarea>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Category</label>
+              <input type="text" class="field-input" data-field="category">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Pricing</label>
+              <input type="text" class="field-input" data-field="pricing" placeholder="Free, Freemium, Paid...">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Tags</label>
+              <input type="text" class="field-input" data-field="tags" placeholder="ai, saas, productivity...">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Logo URL</label>
+              <input type="text" class="field-input" data-field="logo_url">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Screenshot URL</label>
+              <input type="text" class="field-input" data-field="screenshot_url">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Founder Name</label>
+              <input type="text" class="field-input" data-field="founder_name">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Founder Email</label>
+              <input type="email" class="field-input" data-field="founder_email">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Twitter / X</label>
+              <input type="text" class="field-input" data-field="twitter_url" placeholder="https://x.com/...">
+            </div>
+            <div class="field-group">
+              <label class="field-label">GitHub</label>
+              <input type="text" class="field-input" data-field="github_url" placeholder="https://github.com/...">
+            </div>
+          </div>
+
+          <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-md);">
+            <button class="btn btn-primary" id="save-product-btn">Save &amp; See Directories</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUCT DETAIL: Directory checklist -->
+    <div id="view-product" class="view">
+      <div style="margin-bottom: var(--space-md);">
+        <a class="nav-link" id="back-to-products" style="cursor:pointer;">&larr; Back</a>
+      </div>
+
+      <div class="product-card" id="detail-product-card"></div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm);">
+        <h2 class="section-title" style="margin-bottom: 0;">Directory Checklist</h2>
+        <div class="directory-stats" id="directory-stats" style="margin-bottom: 0;"></div>
+      </div>
+
+      <div class="filter-bar" id="filter-bar">
+        <button class="filter-pill is-active" data-filter="all">All</button>
+        <button class="filter-pill" data-filter="ready">Ready</button>
+        <button class="filter-pill" data-filter="missing">Missing Info</button>
+        <button class="filter-pill" data-filter="submitted">Submitted</button>
+        <button class="filter-pill" data-filter="approved">Approved</button>
+      </div>
+
+      <div class="directory-list" id="directory-list"></div>
+    </div>
+
+    <!-- PRODUCTS LIST -->
+    <div id="view-products" class="view">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-md);">
+        <h2 class="section-title" style="margin-bottom: 0;">Your Products</h2>
+      </div>
+      <div id="products-list" class="products-list"></div>
+    </div>
+
+    <!-- DIRECTORIES VIEW -->
+    <div id="view-directories" class="view">
+      <h2 class="section-title">All Directories</h2>
+      <p style="color: var(--text-secondary); margin-bottom: var(--space-md);">20 curated directories worth submitting to.</p>
+      <div class="directory-list" id="all-directories-list"></div>
+    </div>
+
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
