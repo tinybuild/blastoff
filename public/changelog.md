@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-05-21 — Pivot: MCP server (v0.2.0)
+
+BlastOff now ships as an **MCP server** at `/mcp` (JSON-RPC 2.0). Your AI agent — Claude Code, Cursor, Codex — calls BlastOff directly to read profiles, fetch directory recipes, and generate copy variants. The agent drives the browser. You stop clicking.
+
+Six tools live on day one: `get_profile`, `list_directories`, `get_recipe`, `generate_variants`, `extract_from_url`, `mark_submitted`. Server card auto-discoverable at `/.well-known/mcp/server-card.json`.
+
+The Chrome extension shipped this morning is retired — moved to `/archive`. The customer is the agent-fluent indie maker, and that customer already has a better runtime than anything we can ship to chrome.google.com.
+
+Next: the `/blastoff` skill plugin, the DevHunt end-to-end demo, and an API key auth gate before public release.
+
+## 2026-05-21 — Chrome extension (v0.1.0)
+
+The **BlastOff Autofill** Chrome extension lands. Load it unpacked from `~/projects/blastoff/extension/`, paste your product URL, and directory submit pages fill themselves on page load.
+
+First wired directory: **DevHunt**. Name, tagline, website, GitHub repo, description, and pricing radio all autofill. A floating badge bottom-right shows what got filled and what stays manual (file uploads, multi-select category autocompletes). Review, fix, hit Submit yourself.
+
+The thirty-card cockpit shows the work. The extension does the work.
+
 ## 2026-05-21 — Cockpit
 
 The new **Cockpit** at `/cockpit.html` shows every directory at once for a given product. Each card surfaces ease (🟢/🟡/🔴), how many required fields are ready, friction warnings (login, captcha, paid, backlink, Mondays-only), and an **Open + Copy** launch button that drops the right fields into your clipboard and opens the directory's submit page in a new tab.

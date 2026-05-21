@@ -4,6 +4,18 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // MCP server (JSON-RPC 2.0 over POST)
+    if (url.pathname === '/mcp') {
+      return handleMCP(request, env);
+    }
+
+    // MCP server card for client auto-discovery
+    if (url.pathname === '/.well-known/mcp/server-card.json') {
+      return Response.json(MCP_SERVER_CARD, {
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+
     // API routes
     if (url.pathname.startsWith('/api/')) {
       const corsHeaders = {
@@ -162,6 +174,18 @@ async function handleAPI(path, request, env) {
   if (path === '/api/directories' && request.method === 'GET') {
     const { results } = await env.DB.prepare('SELECT * FROM directories WHERE status = ? ORDER BY priority DESC').bind('active').all();
     return Response.json(results);
+  }
+
+  // Lean product profile by URL — for the Chrome extension to read on directory submit pages
+  if (path === '/api/profile' && request.method === 'GET') {
+    const productUrl = new URL(request.url).searchParams.get('url');
+    if (!productUrl) return Response.json({ error: 'url required' }, { status: 400 });
+
+    const normalized = normalizeUrl(productUrl);
+    const product = await env.DB.prepare('SELECT * FROM products WHERE url = ?').bind(normalized).first();
+    if (!product) return Response.json({ error: 'Product not found. Extract it first at /' }, { status: 404 });
+
+    return Response.json(product);
   }
 
   // Cockpit: product + all directories with readiness + submissions
@@ -476,4 +500,235 @@ Write the ${spec.label} now (under ${limit} chars):`;
   let text = (aiResponse.content[0]?.text || '').trim();
   text = text.replace(/^["']|["']$/g, '').trim();
   return trimToLimit(text, limit);
+}
+
+// ─────────────────────────────────────────────────────────────
+// MCP SERVER (JSON-RPC 2.0)
+// ─────────────────────────────────────────────────────────────
+
+const MCP_SERVER_CARD = {
+  name: 'blastoff',
+  version: '0.1.0',
+  description: 'Submit your product to 30 launch directories from inside your AI agent. Get profile + directory recipes + AI-generated copy variants as MCP tools; the agent drives the browser.',
+  vendor: { name: 'TinyBuild Studio', url: 'https://blastoff.tinybuild.workers.dev' },
+  transport: { type: 'http', url: 'https://blastoff.tinybuild.workers.dev/mcp' },
+  capabilities: { tools: true, resources: false, prompts: false },
+};
+
+const MCP_TOOLS = [
+  {
+    name: 'get_profile',
+    description: 'Get a saved product profile by URL. Returns name, taglines at 60/80/140 char lengths, descriptions, pricing, category, tags, founder fields. Profile must be extracted first via extract_from_url or the BlastOff dashboard.',
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'Product website URL' } },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'list_directories',
+    description: 'List all 30 supported launch directories with ease tier (easy/medium/hard), auth model, captcha presence, free/paid status, and average approval days. Use to pick which directories a product can submit to today.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_recipe',
+    description: 'Get the full submission recipe for a directory by slug. Returns submit URL, field list with selectors + max lengths + dropdown values, gotchas, and unfillable fields. The agent uses this to drive Playwright MCP or chrome-devtools MCP.',
+    inputSchema: {
+      type: 'object',
+      properties: { slug: { type: 'string', description: 'Directory slug like "devhunt", "product-hunt", "alternativeto" (kebab-case)' } },
+      required: ['slug'],
+    },
+  },
+  {
+    name: 'generate_variants',
+    description: 'Generate or regenerate a copy variant for a product field at a specific character limit. Use to fit Product Hunt (60 char tagline), Hacker News (80 char title), BetaList (140 char one-liner), or the 260-char card description. Returns the new value; does NOT save it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Product URL' },
+        field: { type: 'string', enum: ['tagline', 'tagline_80', 'tagline_140', 'description', 'long_description'], description: 'Which field to regenerate' },
+        char_limit: { type: 'number', description: 'Optional override for the default char limit of the field' },
+      },
+      required: ['url', 'field'],
+    },
+  },
+  {
+    name: 'extract_from_url',
+    description: 'Run the full extractor on a product URL: scrapes the page, fills gaps with AI (name, tagline variants, description, category, tags, pricing), creates or updates the product in BlastOff. Returns the saved profile. Costs Claude tokens — expensive call.',
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'Product website URL' } },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'mark_submitted',
+    description: 'Mark a submission as completed after the user submits the form. Updates the submission row to status=submitted with the current timestamp and optional listing URL.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        product_url: { type: 'string', description: 'Product URL the submission belongs to' },
+        directory_slug: { type: 'string', description: 'Directory slug like "devhunt"' },
+        listing_url: { type: 'string', description: 'Optional URL of the published listing' },
+      },
+      required: ['product_url', 'directory_slug'],
+    },
+  },
+];
+
+async function handleMCP(request, env) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+  if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (request.method !== 'POST') {
+    return Response.json({ jsonrpc: '2.0', error: { code: -32600, message: 'POST only' } }, { status: 405, headers: corsHeaders });
+  }
+
+  let body;
+  try { body = await request.json(); }
+  catch { return Response.json({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' } }, { status: 400, headers: corsHeaders }); }
+
+  const { id, method, params } = body;
+  const reply = (result) => Response.json({ jsonrpc: '2.0', id, result }, { headers: corsHeaders });
+  const fail = (code, message) => Response.json({ jsonrpc: '2.0', id, error: { code, message } }, { headers: corsHeaders });
+
+  try {
+    if (method === 'initialize') {
+      return reply({
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: MCP_SERVER_CARD.name, version: MCP_SERVER_CARD.version },
+      });
+    }
+
+    if (method === 'tools/list') {
+      return reply({ tools: MCP_TOOLS });
+    }
+
+    if (method === 'tools/call') {
+      const { name, arguments: args } = params || {};
+      const result = await callMCPTool(name, args || {}, env);
+      return reply({
+        content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
+      });
+    }
+
+    return fail(-32601, `Method not found: ${method}`);
+  } catch (err) {
+    return reply({
+      content: [{ type: 'text', text: `Error: ${err.message}` }],
+      isError: true,
+    });
+  }
+}
+
+async function callMCPTool(name, args, env) {
+  if (name === 'get_profile') {
+    const normalized = normalizeUrl(args.url);
+    const product = await env.DB.prepare('SELECT * FROM products WHERE url = ?').bind(normalized).first();
+    if (!product) throw new Error(`Product not found for ${args.url}. Run extract_from_url first.`);
+    return product;
+  }
+
+  if (name === 'list_directories') {
+    const { results } = await env.DB.prepare(`
+      SELECT id, slug, name, url, submit_url, ease, ease_reason, description, auth_type, has_captcha, is_free, approval_type, avg_approval_days
+      FROM directories WHERE status = 'active'
+      ORDER BY CASE ease WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END, name
+    `).all();
+    return { count: results.length, directories: results };
+  }
+
+  if (name === 'get_recipe') {
+    const dir = await env.DB.prepare('SELECT * FROM directories WHERE slug = ?').bind(args.slug).first();
+    if (!dir) throw new Error(`Directory not found: ${args.slug}. Use list_directories for available slugs.`);
+    const { results: fields } = await env.DB.prepare(`
+      SELECT field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order
+      FROM directory_fields WHERE directory_id = ? ORDER BY field_order, id
+    `).bind(dir.id).all();
+    return {
+      slug: dir.slug,
+      name: dir.name,
+      submit_url: dir.submit_url,
+      ease: dir.ease,
+      ease_reason: dir.ease_reason,
+      auth_type: dir.auth_type,
+      has_captcha: dir.has_captcha === 1,
+      is_free: dir.is_free === 1,
+      approval_type: dir.approval_type,
+      avg_approval_days: dir.avg_approval_days,
+      fields: fields.map(f => ({
+        name: f.field_name,
+        label: f.field_label,
+        required: f.is_required === 1,
+        max_length: f.max_length,
+        selector: f.selector,
+        dropdown_values: f.dropdown_values,
+        notes: f.notes,
+      })),
+    };
+  }
+
+  if (name === 'generate_variants') {
+    const normalized = normalizeUrl(args.url);
+    const product = await env.DB.prepare('SELECT * FROM products WHERE url = ?').bind(normalized).first();
+    if (!product) throw new Error(`Product not found for ${args.url}. Run extract_from_url first.`);
+    const value = await regenerateField(product, args.field, args.char_limit, env);
+    return { field: args.field, value };
+  }
+
+  if (name === 'extract_from_url') {
+    const product = await extractFromURL(args.url, env);
+    const normalized = normalizeUrl(args.url);
+    const n = (v) => (v === undefined ? null : v);
+    const existing = await env.DB.prepare('SELECT id FROM products WHERE url = ?').bind(normalized).first();
+    if (existing) {
+      await env.DB.prepare(`
+        UPDATE products SET name=?, tagline=?, tagline_80=?, tagline_140=?, description=?, long_description=?,
+          logo_url=?, screenshot_url=?, pricing=?, category=?, tags=?, founder_name=?, founder_email=?,
+          twitter_url=?, github_url=?, updated_at=CURRENT_TIMESTAMP WHERE url=?
+      `).bind(
+        n(product.name), n(product.tagline), n(product.tagline_80), n(product.tagline_140),
+        n(product.description), n(product.long_description),
+        n(product.logo_url), n(product.screenshot_url), n(product.pricing), n(product.category),
+        n(product.tags), n(product.founder_name), n(product.founder_email),
+        n(product.twitter_url), n(product.github_url), normalized
+      ).run();
+    } else {
+      const result = await env.DB.prepare(`
+        INSERT INTO products (url, name, tagline, tagline_80, tagline_140, description, long_description, logo_url, screenshot_url, pricing, category, tags, founder_name, founder_email, twitter_url, github_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        normalized, n(product.name), n(product.tagline), n(product.tagline_80), n(product.tagline_140),
+        n(product.description), n(product.long_description),
+        n(product.logo_url), n(product.screenshot_url), n(product.pricing), n(product.category),
+        n(product.tags), n(product.founder_name), n(product.founder_email), n(product.twitter_url), n(product.github_url)
+      ).run();
+      const productId = result.meta.last_row_id;
+      const dirs = await env.DB.prepare('SELECT id FROM directories WHERE status = ?').bind('active').all();
+      for (const dir of dirs.results) {
+        await env.DB.prepare('INSERT INTO submissions (product_id, directory_id) VALUES (?, ?)').bind(productId, dir.id).run();
+      }
+    }
+    return product;
+  }
+
+  if (name === 'mark_submitted') {
+    const normalized = normalizeUrl(args.product_url);
+    const product = await env.DB.prepare('SELECT id FROM products WHERE url = ?').bind(normalized).first();
+    if (!product) throw new Error(`Product not found for ${args.product_url}`);
+    const dir = await env.DB.prepare('SELECT id FROM directories WHERE slug = ?').bind(args.directory_slug).first();
+    if (!dir) throw new Error(`Directory not found: ${args.directory_slug}`);
+    const updates = ['status = ?', 'submitted_at = CURRENT_TIMESTAMP'];
+    const binds = ['submitted'];
+    if (args.listing_url) { updates.push('listing_url = ?'); binds.push(args.listing_url); }
+    binds.push(product.id, dir.id);
+    await env.DB.prepare(`UPDATE submissions SET ${updates.join(', ')} WHERE product_id = ? AND directory_id = ?`).bind(...binds).run();
+    return { ok: true, product_url: args.product_url, directory_slug: args.directory_slug, status: 'submitted' };
+  }
+
+  throw new Error(`Unknown tool: ${name}`);
 }

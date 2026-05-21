@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "BlastOff Autofill",
+  "version": "0.1.0",
+  "description": "Fills directory submission forms from your BlastOff profile. Paste a product URL once, then submit to 30 directories with one click each.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "BlastOff"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://blastoff.tinybuild.workers.dev/*",
+    "https://devhunt.org/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://devhunt.org/*"
+      ],
+      "js": ["rules/devhunt.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

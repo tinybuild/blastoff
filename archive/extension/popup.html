@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BlastOff</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>🚀 BlastOff</h1>
+    <p class="tagline">Autofill submissions from your profile</p>
+  </header>
+
+  <section class="profile-box">
+    <label for="product-url">Product URL</label>
+    <input id="product-url" type="url" placeholder="https://getbonfire.dev" />
+    <button id="load-profile">Load profile</button>
+    <p id="status" class="status"></p>
+  </section>
+
+  <section class="profile-card" id="profile-card" hidden>
+    <div class="row">
+      <span class="key">Name</span>
+      <span class="val" id="p-name"></span>
+    </div>
+    <div class="row">
+      <span class="key">Tagline</span>
+      <span class="val" id="p-tagline"></span>
+    </div>
+    <div class="row">
+      <span class="key">Description</span>
+      <span class="val small" id="p-desc"></span>
+    </div>
+  </section>
+
+  <section class="directories">
+    <h2>Supported directories</h2>
+    <ul>
+      <li class="ready">
+        <span class="dot"></span>
+        <a href="https://devhunt.org/account/tools/new" target="_blank">DevHunt</a>
+        <span class="tag">autofill ready</span>
+      </li>
+      <li class="coming">
+        <span class="dot"></span>
+        <span>Product Hunt, AlternativeTo, SaaSHub …</span>
+        <span class="tag">soon</span>
+      </li>
+    </ul>
+  </section>
+
+  <footer>
+    <a href="https://blastoff.tinybuild.workers.dev/cockpit" target="_blank">Open cockpit ↗</a>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
