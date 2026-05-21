@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-21 — Connect your agent (v0.3.0)
+
+New page at `/connect` walks you through installing BlastOff in your AI agent — **Claude Code**, **Cursor**, **Codex**, or any other MCP-compatible client. Pick your runtime via the tabs, follow the four numbered steps, copy the commands.
+
+Two-step install for Claude Code matches the category convention:
+
+```
+/plugin marketplace add tinybuild/skills
+/plugin install blastoff@tinybuild-skills
+```
+
+Add the marketplace once, install BlastOff (and every future TinyBuild plugin) with a single line.
+
 ## 2026-05-21 — Pivot: MCP server (v0.2.0)
 
 BlastOff now ships as an **MCP server** at `/mcp` (JSON-RPC 2.0). Your AI agent — Claude Code, Cursor, Codex — calls BlastOff directly to read profiles, fetch directory recipes, and generate copy variants. The agent drives the browser. You stop clicking.

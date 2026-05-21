@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect your agent — BlastOff</title>
+  <meta name="description" content="Install BlastOff in Claude Code, Cursor, or any MCP-compatible AI agent. Submit your product to 30 launch directories without leaving your editor.">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/connect.css">
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="/" class="nav-logo">BlastOff</a>
+    <div class="nav-links">
+      <a class="nav-link" href="/">Launch</a>
+      <a class="nav-link" href="/cockpit">Cockpit</a>
+      <a class="nav-link is-active" href="/connect">Connect</a>
+      <a class="nav-link" href="/changelog">Changelog</a>
+    </div>
+  </nav>
+
+  <main class="connect-page">
+    <header class="connect-header">
+      <h1>Connect your agent.</h1>
+      <p>Choose where you want to run BlastOff, then follow the setup steps.</p>
+    </header>
+
+    <div class="agent-tabs" role="tablist">
+      <button class="agent-tab is-active" data-agent="claude-code" role="tab" aria-selected="true">
+        <span class="agent-tab-icon">✶</span> Claude Code
+      </button>
+      <button class="agent-tab" data-agent="cursor" role="tab" aria-selected="false">
+        <span class="agent-tab-icon">▱</span> Cursor
+      </button>
+      <button class="agent-tab" data-agent="codex" role="tab" aria-selected="false">
+        <span class="agent-tab-icon">◉</span> Codex
+      </button>
+      <button class="agent-tab" data-agent="other" role="tab" aria-selected="false">
+        <span class="agent-tab-icon">❯_</span> Other
+      </button>
+    </div>
+
+    <!-- Claude Code -->
+    <section class="agent-steps is-active" data-agent="claude-code">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h3>Add the BlastOff plugin marketplace.</h3>
+          <pre><code>/plugin marketplace add tinybuild/skills</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h3>Install the plugin in your preferred scope.</h3>
+          <pre><code>/plugin install blastoff@tinybuild-skills</code></pre>
+          <p class="step-note">Use global or user scope to prompt BlastOff from anywhere, or project scope to keep it available only in the current working folder.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h3>Reload plugins so BlastOff is available.</h3>
+          <pre><code>/reload-plugins</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-body">
+          <h3>Authorize the BlastOff MCP server.</h3>
+          <pre><code>claude mcp add --transport http blastoff https://blastoff.tinybuild.workers.dev/mcp</code></pre>
+          <p class="step-note">Run this in any terminal. Claude Code will pick up the new MCP server on the next session.</p>
+        </div>
+      </div>
+
+      <div class="connected-cta">
+        <p>Once you're set up, prompt:</p>
+        <pre class="prompt-example"><code>Submit my product to DevHunt — it lives at https://yourproduct.com</code></pre>
+      </div>
+    </section>
+
+    <!-- Cursor -->
+    <section class="agent-steps" data-agent="cursor">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h3>Open your Cursor MCP config.</h3>
+          <pre><code>~/.cursor/mcp.json</code></pre>
+          <p class="step-note">Create the file if it doesn't exist.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h3>Add BlastOff as an HTTP MCP server.</h3>
+          <pre><code>{
+  "mcpServers": {
+    "blastoff": {
+      "transport": "http",
+      "url": "https://blastoff.tinybuild.workers.dev/mcp"
+    }
+  }
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h3>Restart Cursor.</h3>
+          <p class="step-note">Cursor reads the MCP config on launch. After restart, BlastOff's 6 tools become available to the agent.</p>
+        </div>
+      </div>
+
+      <div class="connected-cta">
+        <p>Then prompt in Composer:</p>
+        <pre class="prompt-example"><code>Use BlastOff to list all directories I can submit to</code></pre>
+      </div>
+    </section>
+
+    <!-- Codex -->
+    <section class="agent-steps" data-agent="codex">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h3>Open the Codex MCP config.</h3>
+          <pre><code>~/.codex/config.toml</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h3>Add BlastOff as an MCP server.</h3>
+          <pre><code>[mcp_servers.blastoff]
+transport = "http"
+url = "https://blastoff.tinybuild.workers.dev/mcp"</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h3>Restart Codex.</h3>
+          <p class="step-note">Codex picks up the MCP server on next launch. The agent will see BlastOff's tools in its tool list.</p>
+        </div>
+      </div>
+
+      <div class="connected-cta">
+        <p>Then prompt:</p>
+        <pre class="prompt-example"><code>Get my BlastOff profile for https://yourproduct.com</code></pre>
+      </div>
+    </section>
+
+    <!-- Other -->
+    <section class="agent-steps" data-agent="other">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h3>Point your MCP-compatible agent at the BlastOff endpoint.</h3>
+          <pre><code>https://blastoff.tinybuild.workers.dev/mcp</code></pre>
+          <p class="step-note">Transport: HTTP. Protocol: JSON-RPC 2.0. Authorization is optional in alpha; API key auth is coming.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h3>Discover available tools.</h3>
+          <pre><code>curl -s -X POST https://blastoff.tinybuild.workers.dev/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</code></pre>
+          <p class="step-note">Returns the six BlastOff tools: get_profile, list_directories, get_recipe, generate_variants, extract_from_url, mark_submitted.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h3>Or fetch the server card for auto-discovery.</h3>
+          <pre><code>https://blastoff.tinybuild.workers.dev/.well-known/mcp/server-card.json</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <footer class="connect-footer">
+      <p>Stuck? <a href="https://github.com/tinybuild/blastoff/issues" target="_blank">Open an issue</a> — or read the <a href="/changelog">changelog</a> for what's shipped.</p>
+    </footer>
+  </main>
+
+  <script src="/connect.js"></script>
+</body>
+</html>
