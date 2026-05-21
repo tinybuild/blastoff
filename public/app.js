@@ -90,7 +90,101 @@ function populateExtractedProduct(product) {
 
   // Refresh char counters + ✓/⚠ states
   document.querySelectorAll('#extracted-product .variant-row').forEach(refreshVariantRow);
+
+  // Render screenshot gallery
+  renderScreenshots(product.screenshots || []);
 }
+
+// ─── Screenshots ───────────────────────────────────────────────
+
+function renderScreenshots(urls) {
+  const gallery = document.getElementById('screenshots-gallery');
+  if (!gallery) return;
+  gallery.innerHTML = '';
+  urls.forEach((url, i) => {
+    const card = document.createElement('div');
+    card.className = 'screenshot-card';
+    card.innerHTML = `
+      <div class="screenshot-frame">
+        <img src="${esc(url)}" alt="Screenshot ${i + 1}" loading="lazy">
+      </div>
+      <div class="screenshot-meta">
+        <span class="screenshot-index">${i === 0 ? 'Hero · ' : ''}${i + 1} of ${urls.length}</span>
+        <button class="screenshot-remove" data-url="${esc(url)}" title="Remove">×</button>
+      </div>
+    `;
+    gallery.appendChild(card);
+  });
+}
+
+async function uploadScreenshot(file) {
+  if (!currentProduct?._id) {
+    setSaveStatus('Save product first', true);
+    return;
+  }
+  if (!file.type.startsWith('image/')) {
+    setSaveStatus('Only images allowed', true);
+    return;
+  }
+  setSaveStatus('Uploading…');
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('product_id', currentProduct._id);
+  try {
+    const res = await fetch(`${API}/api/upload`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json()).error || 'Upload failed');
+    const data = await res.json();
+    currentProduct.screenshots = data.screenshots;
+    renderScreenshots(data.screenshots);
+    setSaveStatus('Saved');
+  } catch (err) {
+    setSaveStatus(err.message, true);
+  }
+}
+
+async function removeScreenshot(url) {
+  if (!currentProduct?._id) return;
+  setSaveStatus('Removing…');
+  try {
+    const res = await fetch(`${API}/api/upload`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: currentProduct._id, url }),
+    });
+    if (!res.ok) throw new Error('Remove failed');
+    const data = await res.json();
+    currentProduct.screenshots = data.screenshots;
+    renderScreenshots(data.screenshots);
+    setSaveStatus('Saved');
+  } catch (err) {
+    setSaveStatus(err.message, true);
+  }
+}
+
+// Drag-drop + file picker
+const dropzone = document.getElementById('screenshot-dropzone');
+const fileInput = document.getElementById('screenshot-input');
+if (dropzone && fileInput) {
+  fileInput.addEventListener('change', async (e) => {
+    for (const file of e.target.files) await uploadScreenshot(file);
+    fileInput.value = '';
+  });
+  ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dropzone.classList.add('is-dragover');
+  }));
+  ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('is-dragover');
+  }));
+  dropzone.addEventListener('drop', async (e) => {
+    for (const file of e.dataTransfer.files) await uploadScreenshot(file);
+  });
+}
+document.addEventListener('click', (e) => {
+  const removeBtn = e.target.closest('.screenshot-remove');
+  if (removeBtn) removeScreenshot(removeBtn.dataset.url);
+});
 
 function refreshVariantRow(row) {
   const input = row.querySelector('[data-field]');

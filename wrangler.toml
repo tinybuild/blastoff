@@ -9,3 +9,10 @@ directory = "public"
 binding = "DB"
 database_name = "blastoff-db"
 database_id = "ff640c05-eac9-443e-a681-24b4e366b40c"
+
+[[r2_buckets]]
+binding = "SCREENSHOTS"
+bucket_name = "blastoff-screenshots"
+
+[vars]
+R2_PUBLIC_URL = "https://pub-70c408865c0742a58010decebb934b30.r2.dev"

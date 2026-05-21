@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-21 — Screenshot uploads (v0.4.0)
+
+Drop your product screenshots straight into the **Screenshots** section of the profile dashboard. They land in Cloudflare R2, attach to your product, and are surfaced to the agent via the `get_profile` MCP tool. Directory submissions can now pull URLs directly instead of you copy-pasting paths.
+
+Each upload renders in a polished frame — gradient bg, drop shadow, rounded corners. The first one is your hero (becomes the social preview on most directories). Drag-drop or click to browse.
+
+Coming next: animated launch GIFs generated from your screenshots via Remotion. Tonight, you upload — soon, the product packages them into something share-worthy.
+
 ## 2026-05-21 — Connect your agent (v0.3.0)
 
 New page at `/connect` walks you through installing BlastOff in your AI agent — **Claude Code**, **Cursor**, **Codex**, or any other MCP-compatible client. Pick your runtime via the tabs, follow the four numbered steps, copy the commands.
