@@ -22,83 +22,137 @@
     <!-- HOME: Extract URL -->
     <div id="view-home" class="view is-active">
       <div class="hero">
-        <h1>Prep your launch</h1>
-        <p>Paste a URL. We extract everything directories need. You review, then submit.</p>
+        <span class="alpha-pill">Alpha</span>
+        <h1>Launch your product everywhere.</h1>
+        <p>Get submission-ready for Product Hunt, BetaList, Hacker News, AlternativeTo, and sixteen more — every field filled, every tagline at the right character count, all queued for your review.</p>
         <form class="extract-form" id="extract-form">
           <input type="url" class="extract-input" id="url-input" placeholder="https://yourproduct.com" required>
-          <button type="submit" class="btn btn-primary" id="extract-btn">Extract</button>
+          <button type="submit" class="btn btn-primary btn-large" id="extract-btn">Extract</button>
         </form>
+        <p class="extract-hint">Drop your URL and we'll extract every field directories need, ready for your review.</p>
       </div>
 
-      <!-- Extracted product (hidden until extraction) -->
+      <div class="preview-wrap">
+        <div class="preview-frame">
+          <div class="preview-placeholder">Dashboard preview</div>
+        </div>
+      </div>
+
+      <!-- Profile dashboard (hidden until extraction) -->
       <div id="extracted-product" style="display: none;">
-        <div class="product-card">
-          <div class="product-header">
+        <div class="profile-card">
+          <div class="profile-header">
             <div id="product-logo-container"></div>
-            <div class="product-info">
+            <div class="profile-info">
               <h2 id="product-display-name">Product Name</h2>
               <div class="tagline" id="product-display-tagline">Tagline</div>
               <a class="product-url" id="product-display-url" href="#" target="_blank"></a>
             </div>
+            <div class="profile-save-status" id="profile-save-status"></div>
           </div>
 
-          <div class="field-grid">
-            <div class="field-group">
-              <label class="field-label">Name</label>
-              <input type="text" class="field-input" data-field="name">
+          <div class="profile-section">
+            <h3 class="profile-section-title">Taglines &amp; descriptions <span class="hint">Each variant has its own character ceiling, regenerate any line.</span></h3>
+
+            <div class="variant-row" data-field="tagline" data-limit="60">
+              <div class="variant-meta"><span class="variant-limit">60</span><span class="variant-label">Product Hunt tagline</span></div>
+              <div class="variant-input-wrap">
+                <input type="text" class="field-input" data-field="tagline" maxlength="60">
+                <span class="char-counter"></span>
+              </div>
+              <button class="btn-regen" data-regen="tagline" title="Regenerate">↻</button>
             </div>
-            <div class="field-group">
-              <label class="field-label">Tagline (60 chars)</label>
-              <input type="text" class="field-input" data-field="tagline" maxlength="60">
+
+            <div class="variant-row" data-field="tagline_80" data-limit="80">
+              <div class="variant-meta"><span class="variant-limit">80</span><span class="variant-label">Show HN title</span></div>
+              <div class="variant-input-wrap">
+                <input type="text" class="field-input" data-field="tagline_80" maxlength="80">
+                <span class="char-counter"></span>
+              </div>
+              <button class="btn-regen" data-regen="tagline_80" title="Regenerate">↻</button>
             </div>
-            <div class="field-group full-width">
-              <label class="field-label">Short Description</label>
-              <textarea class="field-textarea" data-field="description" rows="2"></textarea>
+
+            <div class="variant-row" data-field="tagline_140" data-limit="140">
+              <div class="variant-meta"><span class="variant-limit">140</span><span class="variant-label">BetaList one-sentence pitch</span></div>
+              <div class="variant-input-wrap">
+                <input type="text" class="field-input" data-field="tagline_140" maxlength="140">
+                <span class="char-counter"></span>
+              </div>
+              <button class="btn-regen" data-regen="tagline_140" title="Regenerate">↻</button>
             </div>
-            <div class="field-group full-width">
-              <label class="field-label">Long Description</label>
-              <textarea class="field-textarea" data-field="long_description" rows="4"></textarea>
+
+            <div class="variant-row" data-field="description" data-limit="260">
+              <div class="variant-meta"><span class="variant-limit">260</span><span class="variant-label">Short description</span></div>
+              <div class="variant-input-wrap">
+                <textarea class="field-textarea" data-field="description" rows="2" maxlength="260"></textarea>
+                <span class="char-counter"></span>
+              </div>
+              <button class="btn-regen" data-regen="description" title="Regenerate">↻</button>
             </div>
-            <div class="field-group">
-              <label class="field-label">Category</label>
-              <input type="text" class="field-input" data-field="category">
-            </div>
-            <div class="field-group">
-              <label class="field-label">Pricing</label>
-              <input type="text" class="field-input" data-field="pricing" placeholder="Free, Freemium, Paid...">
-            </div>
-            <div class="field-group">
-              <label class="field-label">Tags</label>
-              <input type="text" class="field-input" data-field="tags" placeholder="ai, saas, productivity...">
-            </div>
-            <div class="field-group">
-              <label class="field-label">Logo URL</label>
-              <input type="text" class="field-input" data-field="logo_url">
-            </div>
-            <div class="field-group">
-              <label class="field-label">Screenshot URL</label>
-              <input type="text" class="field-input" data-field="screenshot_url">
-            </div>
-            <div class="field-group">
-              <label class="field-label">Founder Name</label>
-              <input type="text" class="field-input" data-field="founder_name">
-            </div>
-            <div class="field-group">
-              <label class="field-label">Founder Email</label>
-              <input type="email" class="field-input" data-field="founder_email">
-            </div>
-            <div class="field-group">
-              <label class="field-label">Twitter / X</label>
-              <input type="text" class="field-input" data-field="twitter_url" placeholder="https://x.com/...">
-            </div>
-            <div class="field-group">
-              <label class="field-label">GitHub</label>
-              <input type="text" class="field-input" data-field="github_url" placeholder="https://github.com/...">
+
+            <div class="variant-row variant-row--tall" data-field="long_description">
+              <div class="variant-meta"><span class="variant-limit">long</span><span class="variant-label">Long description</span></div>
+              <div class="variant-input-wrap">
+                <textarea class="field-textarea" data-field="long_description" rows="5"></textarea>
+              </div>
+              <button class="btn-regen" data-regen="long_description" title="Regenerate">↻</button>
             </div>
           </div>
 
-          <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-md);">
-            <button class="btn btn-primary" id="save-product-btn">Save &amp; See Directories</button>
+          <div class="profile-section">
+            <h3 class="profile-section-title">Identity</h3>
+            <div class="field-grid">
+              <div class="field-group">
+                <label class="field-label">Name</label>
+                <input type="text" class="field-input" data-field="name">
+              </div>
+              <div class="field-group">
+                <label class="field-label">Category</label>
+                <input type="text" class="field-input" data-field="category">
+              </div>
+              <div class="field-group">
+                <label class="field-label">Pricing</label>
+                <input type="text" class="field-input" data-field="pricing" placeholder="Free, Freemium, Paid…">
+              </div>
+              <div class="field-group">
+                <label class="field-label">Tags</label>
+                <input type="text" class="field-input" data-field="tags" placeholder="ai, saas, productivity…">
+              </div>
+              <div class="field-group">
+                <label class="field-label">Logo URL</label>
+                <input type="text" class="field-input" data-field="logo_url">
+              </div>
+              <div class="field-group">
+                <label class="field-label">Screenshot URL</label>
+                <input type="text" class="field-input" data-field="screenshot_url">
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-section">
+            <h3 class="profile-section-title">Founder</h3>
+            <div class="field-grid">
+              <div class="field-group">
+                <label class="field-label">Name</label>
+                <input type="text" class="field-input" data-field="founder_name">
+              </div>
+              <div class="field-group">
+                <label class="field-label">Email</label>
+                <input type="email" class="field-input" data-field="founder_email">
+              </div>
+              <div class="field-group">
+                <label class="field-label">Twitter / X</label>
+                <input type="text" class="field-input" data-field="twitter_url" placeholder="https://x.com/…">
+              </div>
+              <div class="field-group">
+                <label class="field-label">GitHub</label>
+                <input type="text" class="field-input" data-field="github_url" placeholder="https://github.com/…">
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-actions">
+            <button class="btn btn-primary" id="see-cockpit-btn">See cockpit →</button>
           </div>
         </div>
       </div>

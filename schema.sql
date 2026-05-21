@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS products (
   url TEXT NOT NULL,
   name TEXT,
   tagline TEXT,
+  tagline_80 TEXT,
+  tagline_140 TEXT,
   description TEXT,
   long_description TEXT,
   logo_url TEXT,

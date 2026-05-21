@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cockpit · BlastOff</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/cockpit.css">
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="nav-logo">BlastOff</a>
+    <div class="nav-links">
+      <a class="nav-link" href="/">Launch</a>
+      <a class="nav-link is-active" href="/cockpit.html">Cockpit</a>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <div id="cockpit-empty" class="cockpit-empty" hidden>
+      <h1>Cockpit</h1>
+      <p>Paste a product URL to load its launch readiness across every directory.</p>
+      <form class="extract-form" id="load-form">
+        <input type="url" class="extract-input" id="url-input" placeholder="https://yourproduct.com" required>
+        <button type="submit" class="btn btn-primary btn-large">Load</button>
+      </form>
+      <p class="extract-hint">Tip: extract a product first at <a href="/">Launch</a>.</p>
+    </div>
+
+    <div id="cockpit-main" hidden>
+      <header class="cockpit-header">
+        <div class="cockpit-product">
+          <h1 id="product-name">—</h1>
+          <p class="cockpit-tagline" id="product-tagline">—</p>
+          <a class="cockpit-url" id="product-url" href="#" target="_blank">—</a>
+        </div>
+        <div class="cockpit-counts">
+          <div class="cockpit-count">
+            <div class="cockpit-count-num" id="count-easy">0</div>
+            <div class="cockpit-count-label">🟢 ready</div>
+          </div>
+          <div class="cockpit-count">
+            <div class="cockpit-count-num" id="count-medium">0</div>
+            <div class="cockpit-count-label">🟡 medium</div>
+          </div>
+          <div class="cockpit-count">
+            <div class="cockpit-count-num" id="count-hard">0</div>
+            <div class="cockpit-count-label">🔴 hard</div>
+          </div>
+          <div class="cockpit-count">
+            <div class="cockpit-count-num" id="count-done">0</div>
+            <div class="cockpit-count-label">✓ done</div>
+          </div>
+        </div>
+      </header>
+
+      <nav class="cockpit-filters" id="filters">
+        <button class="cockpit-filter is-active" data-filter="all">All</button>
+        <button class="cockpit-filter" data-filter="easy">🟢 Easy</button>
+        <button class="cockpit-filter" data-filter="medium">🟡 Medium</button>
+        <button class="cockpit-filter" data-filter="hard">🔴 Hard</button>
+        <button class="cockpit-filter" data-filter="done">✓ Done</button>
+      </nav>
+
+      <main class="cockpit-grid" id="grid"></main>
+    </div>
+
+    <div id="cockpit-error" class="cockpit-error" hidden>
+      <h2>Something went wrong</h2>
+      <p id="error-msg">—</p>
+      <a href="/" class="btn btn-primary">Back to Launch</a>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+
+  </div>
+
+  <script src="/cockpit.js"></script>
+</body>
+</html>

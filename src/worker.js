@@ -1,3 +1,5 @@
+import Anthropic from '@anthropic-ai/sdk';
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -36,20 +38,30 @@ async function handleAPI(path, request, env) {
     const { url } = await request.json();
     if (!url) return Response.json({ error: 'URL required' }, { status: 400 });
 
-    const product = await extractFromURL(url);
+    const product = await extractFromURL(url, env);
     return Response.json(product);
   }
 
-  // Save a product
+  // Save a product (upsert by URL — same URL returns existing id, never duplicates)
   if (path === '/api/products' && request.method === 'POST') {
     const data = await request.json();
+    const normalizedUrl = normalizeUrl(data.url);
+    if (!normalizedUrl) return Response.json({ error: 'URL required' }, { status: 400 });
+
+    const existing = await env.DB.prepare('SELECT id FROM products WHERE url = ?').bind(normalizedUrl).first();
+    if (existing) {
+      return Response.json({ id: existing.id, existed: true });
+    }
+
+    const n = (v) => (v === undefined ? null : v);
     const result = await env.DB.prepare(`
-      INSERT INTO products (url, name, tagline, description, long_description, logo_url, screenshot_url, pricing, category, tags, founder_name, founder_email, twitter_url, github_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (url, name, tagline, tagline_80, tagline_140, description, long_description, logo_url, screenshot_url, pricing, category, tags, founder_name, founder_email, twitter_url, github_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      data.url, data.name, data.tagline, data.description, data.long_description,
-      data.logo_url, data.screenshot_url, data.pricing, data.category, data.tags,
-      data.founder_name, data.founder_email, data.twitter_url, data.github_url
+      normalizedUrl, n(data.name), n(data.tagline), n(data.tagline_80), n(data.tagline_140),
+      n(data.description), n(data.long_description),
+      n(data.logo_url), n(data.screenshot_url), n(data.pricing), n(data.category), n(data.tags),
+      n(data.founder_name), n(data.founder_email), n(data.twitter_url), n(data.github_url)
     ).run();
 
     // Create submission entries for all active directories
@@ -59,7 +71,7 @@ async function handleAPI(path, request, env) {
       await env.DB.prepare('INSERT INTO submissions (product_id, directory_id) VALUES (?, ?)').bind(productId, dir.id).run();
     }
 
-    return Response.json({ id: productId });
+    return Response.json({ id: productId, existed: false });
   }
 
   // List products
@@ -96,20 +108,36 @@ async function handleAPI(path, request, env) {
   if (path.match(/^\/api\/products\/\d+$/) && request.method === 'PUT') {
     const id = path.split('/').pop();
     const data = await request.json();
+    const n = (v) => (v === undefined ? null : v);
     await env.DB.prepare(`
       UPDATE products SET
-        name = ?, tagline = ?, description = ?, long_description = ?,
+        name = ?, tagline = ?, tagline_80 = ?, tagline_140 = ?,
+        description = ?, long_description = ?,
         logo_url = ?, screenshot_url = ?, pricing = ?, category = ?,
         tags = ?, founder_name = ?, founder_email = ?, twitter_url = ?,
         github_url = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(
-      data.name, data.tagline, data.description, data.long_description,
-      data.logo_url, data.screenshot_url, data.pricing, data.category,
-      data.tags, data.founder_name, data.founder_email, data.twitter_url,
-      data.github_url, id
+      n(data.name), n(data.tagline), n(data.tagline_80), n(data.tagline_140),
+      n(data.description), n(data.long_description),
+      n(data.logo_url), n(data.screenshot_url), n(data.pricing), n(data.category),
+      n(data.tags), n(data.founder_name), n(data.founder_email), n(data.twitter_url),
+      n(data.github_url), id
     ).run();
     return Response.json({ ok: true });
+  }
+
+  // Regenerate a single field at a given char limit
+  if (path === '/api/regenerate' && request.method === 'POST') {
+    const { product_id, field, char_limit } = await request.json();
+    if (!product_id || !field) {
+      return Response.json({ error: 'product_id and field required' }, { status: 400 });
+    }
+    const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(product_id).first();
+    if (!product) return Response.json({ error: 'Product not found' }, { status: 404 });
+
+    const value = await regenerateField(product, field, char_limit, env);
+    return Response.json({ field, value });
   }
 
   // Update submission status
@@ -136,93 +164,255 @@ async function handleAPI(path, request, env) {
     return Response.json(results);
   }
 
+  // Cockpit: product + all directories with readiness + submissions
+  if (path === '/api/cockpit' && request.method === 'GET') {
+    const productUrl = new URL(request.url).searchParams.get('url');
+    if (!productUrl) return Response.json({ error: 'url required' }, { status: 400 });
+
+    const normalized = normalizeUrl(productUrl);
+    const product = await env.DB.prepare('SELECT * FROM products WHERE url = ?').bind(normalized).first();
+    if (!product) return Response.json({ error: 'Product not found. Extract it first at /' }, { status: 404 });
+
+    const { results: directories } = await env.DB.prepare(`
+      SELECT id, slug, name, url, submit_url, ease, ease_reason, description, auth_type, has_captcha, is_free, approval_type, avg_approval_days
+      FROM directories
+      WHERE status = 'active'
+      ORDER BY CASE ease WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END, name
+    `).all();
+
+    const { results: allFields } = await env.DB.prepare(`
+      SELECT directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes
+      FROM directory_fields
+      ORDER BY directory_id, field_order
+    `).all();
+
+    const { results: submissions } = await env.DB.prepare(`
+      SELECT id, directory_id, status, submitted_at, approved_at, listing_url, notes
+      FROM submissions
+      WHERE product_id = ?
+    `).bind(product.id).all();
+
+    const fieldsByDir = {};
+    for (const f of allFields) {
+      if (!fieldsByDir[f.directory_id]) fieldsByDir[f.directory_id] = [];
+      fieldsByDir[f.directory_id].push(f);
+    }
+    const submissionByDir = {};
+    for (const s of submissions) submissionByDir[s.directory_id] = s;
+
+    const isFilled = (v) => v !== null && v !== undefined && String(v).trim().length > 0;
+
+    const directoriesEnriched = directories.map(d => {
+      const fields = fieldsByDir[d.id] || [];
+      const required = fields.filter(f => f.is_required === 1);
+      const filled = required.filter(f => isFilled(product[f.field_name]));
+      const sub = submissionByDir[d.id];
+      const isDone = sub && (sub.status === 'submitted' || sub.status === 'approved');
+
+      return {
+        id: d.id,
+        slug: d.slug,
+        name: d.name,
+        url: d.url,
+        submit_url: d.submit_url,
+        ease: d.ease,
+        ease_reason: d.ease_reason,
+        description: d.description,
+        auth_type: d.auth_type,
+        has_captcha: d.has_captcha === 1,
+        is_free: d.is_free === 1,
+        fields_total: required.length,
+        fields_ready: filled.length,
+        missing_fields: required.filter(f => !isFilled(product[f.field_name])).map(f => f.field_name),
+        all_fields: fields,
+        submission: sub || null,
+        is_done: !!isDone,
+      };
+    });
+
+    return Response.json({ product, directories: directoriesEnriched });
+  }
+
   return Response.json({ error: 'Not found' }, { status: 404 });
 }
 
-// Extract product info from a URL by fetching and parsing meta tags
-async function extractFromURL(targetUrl) {
+// Extract product info from a URL by fetching and parsing meta/body, then AI fills gaps
+async function extractFromURL(targetUrl, env) {
+  let html = '';
+  let fetchError = '';
+
   try {
     const response = await fetch(targetUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BlastOff/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
       redirect: 'follow',
     });
+    html = await response.text();
+  } catch (err) {
+    fetchError = err.message;
+  }
 
-    const html = await response.text();
+  // --- Step 1: Regex extraction from HTML ---
+  let scraped = { url: targetUrl };
 
-    const get = (pattern) => {
+  if (html) {
+    function getMeta(attr, value) {
+      const p1 = new RegExp(`<meta[^>]*${attr}=["']${value}["'][^>]*content=["']([^"']+)["']`, 'i');
+      const p2 = new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*${attr}=["']${value}["']`, 'i');
+      const m1 = html.match(p1);
+      if (m1) return decodeHTMLEntities(m1[1].trim());
+      const m2 = html.match(p2);
+      if (m2) return decodeHTMLEntities(m2[1].trim());
+      return '';
+    }
+
+    function getTag(pattern) {
       const match = html.match(pattern);
       return match ? decodeHTMLEntities(match[1].trim()) : '';
-    };
+    }
 
-    // Extract meta tags
-    const ogTitle = get(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
-    const ogDesc = get(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
-    const ogImage = get(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
-    const metaDesc = get(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
-    const title = get(/<title[^>]*>([^<]+)<\/title>/i);
-    const twitterTitle = get(/<meta[^>]*name=["']twitter:title["'][^>]*content=["']([^"']+)["']/i);
-    const twitterDesc = get(/<meta[^>]*name=["']twitter:description["'][^>]*content=["']([^"']+)["']/i);
-    const twitterImage = get(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i);
-    const keywords = get(/<meta[^>]*name=["']keywords["'][^>]*content=["']([^"']+)["']/i);
+    const ogTitle = getMeta('property', 'og:title');
+    const ogDesc = getMeta('property', 'og:description');
+    const ogImage = getMeta('property', 'og:image');
+    const ogSiteName = getMeta('property', 'og:site_name');
+    const metaDesc = getMeta('name', 'description');
+    const twitterTitle = getMeta('name', 'twitter:title') || getMeta('property', 'twitter:title');
+    const twitterDesc = getMeta('name', 'twitter:description') || getMeta('property', 'twitter:description');
+    const twitterImage = getMeta('name', 'twitter:image') || getMeta('property', 'twitter:image');
+    const keywords = getMeta('name', 'keywords');
+    const author = getMeta('name', 'author');
+    const title = getTag(/<title[^>]*>([^<]+)<\/title>/i);
+    const h1 = getTag(/<h1[^>]*>([^<]+)<\/h1>/i);
+    const paragraphs = [...html.matchAll(/<p[^>]*>([^<]{20,})<\/p>/gi)].map(m => decodeHTMLEntities(m[1].trim()));
+    const favicon = getTag(/<link[^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["'][^>]*href=["']([^"']+)["']/i)
+      || getTag(/<link[^>]*href=["']([^"']+)["'][^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["']/i);
+    const twitterLink = getTag(/href=["'](https?:\/\/(?:twitter\.com|x\.com)\/[^"']+)["']/i);
+    const githubLink = getTag(/href=["'](https?:\/\/github\.com\/[^"']+)["']/i);
 
-    // Try to find favicon/logo
-    const favicon = get(/<link[^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["'][^>]*href=["']([^"']+)["']/i);
-
-    // Build product name — prefer og:title, fall back to title tag, clean up
-    let name = ogTitle || twitterTitle || title || '';
-    // Strip common suffixes like " | Company" or " - Company"
+    let name = ogTitle || twitterTitle || ogSiteName || title || h1 || '';
     name = name.replace(/\s*[|\-–—]\s*[^|\-–—]+$/, '').trim();
 
-    const description = ogDesc || twitterDesc || metaDesc || '';
+    const description = ogDesc || twitterDesc || metaDesc || paragraphs[0] || '';
     const image = ogImage || twitterImage || '';
 
-    // Generate a tagline from the description (first sentence, max 60 chars)
-    let tagline = description;
-    const firstSentence = description.match(/^[^.!?]+[.!?]/);
-    if (firstSentence) tagline = firstSentence[0];
-    if (tagline.length > 60) tagline = tagline.substring(0, 57) + '...';
-
-    // Resolve relative URLs
     const baseUrl = new URL(targetUrl);
     const resolveUrl = (u) => {
       if (!u) return '';
       try { return new URL(u, baseUrl).href; } catch { return u; }
     };
 
-    return {
+    scraped = {
       url: targetUrl,
       name,
-      tagline,
+      tagline: '',
       description,
-      long_description: '',
+      long_description: paragraphs.slice(0, 3).join('\n\n'),
       logo_url: resolveUrl(favicon),
       screenshot_url: resolveUrl(image),
       pricing: '',
       category: '',
       tags: keywords,
-      founder_name: '',
+      founder_name: author,
       founder_email: '',
-      twitter_url: '',
-      github_url: '',
+      twitter_url: twitterLink,
+      github_url: githubLink,
     };
-  } catch (err) {
-    return {
-      url: targetUrl,
-      name: '',
-      tagline: '',
-      description: '',
-      long_description: '',
-      logo_url: '',
-      screenshot_url: '',
-      pricing: '',
-      category: '',
-      tags: '',
-      founder_name: '',
-      founder_email: '',
-      twitter_url: '',
-      github_url: '',
-      _error: err.message,
-    };
+  }
+
+  // --- Step 2: AI agent fills in gaps ---
+  // Detect Cloudflare error pages and clear bad scraped data
+  const isErrorPage = html.includes('Error code:') || html.includes('error code: 1042') || html.includes('522: Connection timed out');
+  if (isErrorPage) {
+    scraped = { url: targetUrl, name: '', tagline: '', description: '', long_description: '', logo_url: '', screenshot_url: '', pricing: '', category: '', tags: '', founder_name: '', founder_email: '', twitter_url: '', github_url: '' };
+    fetchError = 'Cloudflare same-account Worker fetch blocked (error 1042)';
+  }
+
+  // Strip HTML to plain text for AI (keep it under 4000 chars)
+  const plainText = isErrorPage ? '' : html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 4000);
+
+  // Always run AI for the tagline variants + long_description — the variants are core value
+  if (plainText || fetchError) {
+    try {
+      const prompt = `You are a product analyst writing copy for launch directory submissions.
+
+URL: ${targetUrl}
+${fetchError || plainText.includes('Error code:') ? `Note: Could not fetch the page content (likely a same-network restriction). Ignore any error page content below. Use your knowledge of this URL/product to generate the best possible listing info.` : ''}
+
+Page content:
+${plainText || '(could not fetch page content)'}
+
+Already extracted:
+- Name: ${scraped.name || '(missing)'}
+- Description: ${scraped.description || '(missing)'}
+
+Return a JSON object with ONLY these fields. Every tagline variant must be a complete sentence under its character limit — count characters carefully:
+{
+  "name": "Product name (short, no tagline)",
+  "tagline_60": "Tagline under 60 chars (Product Hunt limit)",
+  "tagline_80": "Tagline under 80 chars (Hacker News Show HN title limit)",
+  "tagline_140": "Tagline under 140 chars (BetaList one-sentence pitch)",
+  "description": "2-3 sentence description, under 260 chars (Product Hunt card)",
+  "long_description": "Detailed 2-paragraph description of the product, what it does, who it's for",
+  "category": "One of: SaaS, Developer Tool, AI Tool, Marketplace, Productivity, Design, Analytics, Marketing, Communication, Other",
+  "tags": "comma-separated relevant tags (5-8 tags)",
+  "pricing": "Free, Freemium, Paid, or specific pricing info"
+}`;
+
+      const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+      const aiResponse = await client.messages.create({
+        model: 'claude-opus-4-7',
+        max_tokens: 900,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const aiText = aiResponse.content[0]?.text || '';
+      const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const aiData = JSON.parse(jsonMatch[0]);
+        if (!scraped.name && aiData.name) scraped.name = aiData.name;
+        if (aiData.tagline_60) scraped.tagline = trimToLimit(aiData.tagline_60, 60);
+        if (aiData.tagline_80) scraped.tagline_80 = trimToLimit(aiData.tagline_80, 80);
+        if (aiData.tagline_140) scraped.tagline_140 = trimToLimit(aiData.tagline_140, 140);
+        if (aiData.description) scraped.description = trimToLimit(aiData.description, 260);
+        if (aiData.long_description) scraped.long_description = aiData.long_description;
+        if (!scraped.category && aiData.category) scraped.category = aiData.category;
+        if (!scraped.tags && aiData.tags) scraped.tags = aiData.tags;
+        if (!scraped.pricing && aiData.pricing) scraped.pricing = aiData.pricing;
+      }
+    } catch (aiErr) {
+      scraped._ai_error = aiErr.message;
+    }
+  }
+
+  // Belt-and-braces fallback: derive 60 from description if AI dropped it
+  if (!scraped.tagline && scraped.description) {
+    let tagline = scraped.description;
+    const firstSentence = tagline.match(/^[^.!?]+[.!?]/);
+    if (firstSentence) tagline = firstSentence[0];
+    scraped.tagline = trimToLimit(tagline, 60);
+  }
+
+  if (fetchError && !scraped._ai_error) scraped._fetch_note = 'Page fetch failed, data generated by AI from URL context';
+
+  return scraped;
+}
+
+function normalizeUrl(raw) {
+  if (!raw) return '';
+  try {
+    const u = new URL(raw.trim());
+    u.hostname = u.hostname.toLowerCase().replace(/^www\./, '');
+    u.hash = '';
+    if (u.pathname === '/') u.pathname = '';
+    return u.toString().replace(/\/$/, '');
+  } catch {
+    return raw.trim();
   }
 }
 
@@ -235,4 +425,55 @@ function decodeHTMLEntities(str) {
     .replace(/&#39;/g, "'")
     .replace(/&#x27;/g, "'")
     .replace(/&#x2F;/g, '/');
+}
+
+function trimToLimit(str, limit) {
+  if (!str) return '';
+  const s = str.trim();
+  if (s.length <= limit) return s;
+  const cut = s.substring(0, limit - 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > limit * 0.6 ? cut.substring(0, lastSpace) : cut).replace(/[.,;:!?-]+$/, '') + '…';
+}
+
+const FIELD_SPECS = {
+  tagline: { label: 'tagline', limit: 60, voice: 'punchy, one-line pitch, no period at end' },
+  tagline_80: { label: 'tagline', limit: 80, voice: 'one-line pitch, room for a verb + benefit' },
+  tagline_140: { label: 'tagline', limit: 140, voice: 'one full sentence pitch with a hook' },
+  description: { label: 'short description', limit: 260, voice: '2-3 sentences for a launch card' },
+  long_description: { label: 'long description', limit: 1200, voice: '2 short paragraphs: what it does, who it is for' },
+};
+
+async function regenerateField(product, field, charLimit, env) {
+  const spec = FIELD_SPECS[field];
+  if (!spec) throw new Error(`Unsupported field: ${field}`);
+  const limit = charLimit || spec.limit;
+
+  const context = [
+    `Product: ${product.name || 'Unnamed'}`,
+    product.url ? `URL: ${product.url}` : null,
+    product.tagline ? `Current 60-char tagline: ${product.tagline}` : null,
+    product.description ? `Short description: ${product.description}` : null,
+    product.long_description ? `Long description: ${product.long_description}` : null,
+    product.category ? `Category: ${product.category}` : null,
+    product.tags ? `Tags: ${product.tags}` : null,
+    product.pricing ? `Pricing: ${product.pricing}` : null,
+  ].filter(Boolean).join('\n');
+
+  const prompt = `You are writing launch directory copy. Generate a single ${spec.label} for this product under ${limit} characters. Voice: ${spec.voice}. Return ONLY the text — no quotes, no JSON, no preamble.
+
+${context}
+
+Write the ${spec.label} now (under ${limit} chars):`;
+
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const aiResponse = await client.messages.create({
+    model: 'claude-opus-4-7',
+    max_tokens: 400,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  let text = (aiResponse.content[0]?.text || '').trim();
+  text = text.replace(/^["']|["']$/g, '').trim();
+  return trimToLimit(text, limit);
 }

@@ -34,7 +34,7 @@ document.getElementById('extract-form').addEventListener('submit', async (e) => 
 
   const btn = document.getElementById('extract-btn');
   btn.disabled = true;
-  btn.textContent = 'Extracting...';
+  btn.textContent = 'Extracting…';
 
   try {
     const res = await fetch(`${API}/api/extract`, {
@@ -45,8 +45,19 @@ document.getElementById('extract-form').addEventListener('submit', async (e) => 
     const product = await res.json();
     populateExtractedProduct(product);
     document.getElementById('extracted-product').style.display = 'block';
+
+    // Auto-save so we have an id for regenerate + auto-save edits
+    const saveRes = await fetch(`${API}/api/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
+    });
+    const { id } = await saveRes.json();
+    currentProduct._id = id;
+    setSaveStatus('Saved');
   } catch (err) {
     console.error('Extract failed:', err);
+    setSaveStatus('Extract failed', true);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Extract';
@@ -54,7 +65,7 @@ document.getElementById('extract-form').addEventListener('submit', async (e) => 
 });
 
 function populateExtractedProduct(product) {
-  currentProduct = product;
+  currentProduct = { ...product };
 
   // Logo
   const logoContainer = document.getElementById('product-logo-container');
@@ -66,44 +77,139 @@ function populateExtractedProduct(product) {
 
   // Header display
   document.getElementById('product-display-name').textContent = product.name || 'Untitled';
-  document.getElementById('product-display-tagline').textContent = product.tagline || 'No tagline extracted';
+  document.getElementById('product-display-tagline').textContent = product.tagline || 'No 60-char tagline yet';
   const urlEl = document.getElementById('product-display-url');
   urlEl.textContent = product.url;
   urlEl.href = product.url;
 
   // Fill all fields
-  document.querySelectorAll('[data-field]').forEach(input => {
+  document.querySelectorAll('#extracted-product [data-field]').forEach(input => {
     const field = input.dataset.field;
     input.value = product[field] || '';
   });
+
+  // Refresh char counters + ✓/⚠ states
+  document.querySelectorAll('#extracted-product .variant-row').forEach(refreshVariantRow);
 }
 
-// --- Save Product ---
-document.getElementById('save-product-btn').addEventListener('click', async () => {
-  const data = { ...currentProduct };
-  document.querySelectorAll('[data-field]').forEach(input => {
-    data[input.dataset.field] = input.value;
-  });
+function refreshVariantRow(row) {
+  const input = row.querySelector('[data-field]');
+  const counter = row.querySelector('.char-counter');
+  if (!input) return;
+  const limit = parseInt(row.dataset.limit, 10);
+  const len = (input.value || '').length;
+  if (counter && limit) {
+    counter.textContent = `${len} / ${limit}`;
+    counter.classList.toggle('over', len > limit);
+    counter.classList.toggle('empty', len === 0);
+  }
+  row.classList.toggle('row-ready', len > 0 && (!limit || len <= limit));
+  row.classList.toggle('row-empty', len === 0);
+  row.classList.toggle('row-over', !!limit && len > limit);
 
-  const btn = document.getElementById('save-product-btn');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
+  // Mirror 60-char tagline into header preview
+  if (input.dataset.field === 'tagline') {
+    document.getElementById('product-display-tagline').textContent = input.value || 'No 60-char tagline yet';
+  }
+  if (input.dataset.field === 'name') {
+    document.getElementById('product-display-name').textContent = input.value || 'Untitled';
+  }
+}
 
+// --- Live char counters + debounced auto-save ---
+let saveTimer = null;
+function scheduleSave() {
+  setSaveStatus('Saving…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveProfile, 600);
+}
+
+async function saveProfile() {
+  if (!currentProduct?._id) return;
+  const data = collectProfileData();
   try {
-    const res = await fetch(`${API}/api/products`, {
-      method: 'POST',
+    await fetch(`${API}/api/products/${currentProduct._id}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    const { id } = await res.json();
-    await loadProductDetail(id);
-    showView('product');
+    Object.assign(currentProduct, data);
+    setSaveStatus('Saved');
   } catch (err) {
-    console.error('Save failed:', err);
+    setSaveStatus('Save failed', true);
+  }
+}
+
+function collectProfileData() {
+  const data = {};
+  document.querySelectorAll('#extracted-product [data-field]').forEach(input => {
+    data[input.dataset.field] = input.value;
+  });
+  return data;
+}
+
+function setSaveStatus(text, isError = false) {
+  const el = document.getElementById('profile-save-status');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('is-error', isError);
+}
+
+document.addEventListener('input', (e) => {
+  const input = e.target.closest('#extracted-product [data-field]');
+  if (!input) return;
+  const row = input.closest('.variant-row');
+  if (row) refreshVariantRow(row);
+  scheduleSave();
+});
+
+// --- Regenerate button ---
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-regen');
+  if (!btn) return;
+  if (!currentProduct?._id) {
+    setSaveStatus('Save first', true);
+    return;
+  }
+  const field = btn.dataset.regen;
+  const row = btn.closest('.variant-row');
+  const limit = row?.dataset.limit ? parseInt(row.dataset.limit, 10) : null;
+  const input = row?.querySelector('[data-field]');
+  if (!input) return;
+
+  btn.disabled = true;
+  btn.classList.add('is-loading');
+  setSaveStatus('Regenerating…');
+
+  try {
+    // Flush any pending save first so Claude sees latest context
+    clearTimeout(saveTimer);
+    await saveProfile();
+
+    const res = await fetch(`${API}/api/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: currentProduct._id, field, char_limit: limit }),
+    });
+    if (!res.ok) throw new Error('Regen failed');
+    const { value } = await res.json();
+    input.value = value;
+    refreshVariantRow(row);
+    scheduleSave();
+  } catch (err) {
+    setSaveStatus('Regen failed', true);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Save & See Directories';
+    btn.classList.remove('is-loading');
   }
+});
+
+// --- See cockpit ---
+document.getElementById('see-cockpit-btn').addEventListener('click', async () => {
+  if (!currentProduct?._id) return;
+  await saveProfile();
+  await loadProductDetail(currentProduct._id);
+  showView('product');
 });
 
 // --- Load Product Detail ---
