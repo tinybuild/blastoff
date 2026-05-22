@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-22 — DevHunt reality check
+
+First end-to-end test caught three things: pasting bare URLs (without `https://`) now works, DevHunt's submit URL was wrong (404 → `/account/tools/new`), and DevHunt's launch week is $49 for the next 13 months — flagged 🔴 hard, not 🟢 easy. Cockpit tier is honest again.
+
 ## 2026-05-21 — Screenshot uploads (v0.4.0)
 
 Drop your product screenshots straight into the **Screenshots** section of the profile dashboard. They land in Cloudflare R2, attach to your product, and are surfaced to the agent via the `get_profile` MCP tool. Directory submissions can now pull URLs directly instead of you copy-pasting paths.

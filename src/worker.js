@@ -479,8 +479,10 @@ function parseProduct(p) {
 
 function normalizeUrl(raw) {
   if (!raw) return '';
+  let input = raw.trim();
+  if (!/^https?:\/\//i.test(input)) input = 'https://' + input;
   try {
-    const u = new URL(raw.trim());
+    const u = new URL(input);
     u.hostname = u.hostname.toLowerCase().replace(/^www\./, '');
     u.hash = '';
     if (u.pathname === '/') u.pathname = '';

@@ -159,7 +159,7 @@ const EXISTING_EASE = {
   'Indie Hackers': ['medium', 'SPA — needs logged-in first-run capture'],
   'AlternativeTo': ['easy', 'free + account, manual ~3d'],
   'SaaSHub': ['easy', 'free + account, manual ~2d'],
-  'DevHunt': ['easy', 'open-source form, real selectors mapped'],
+  'DevHunt': ['hard', '$49 wall on every launch week for next 13mo; one free slot exists ~June 2027'],
   "There's an AI for That": ['hard', '$49 min · Cloudflare · multi-step funnel'],
   'Futurepedia': ['hard', '$247 basic · $497 verified · no free path'],
   'Uneed': ['medium', 'gated · slow free queue · also a competitor'],
@@ -187,10 +187,10 @@ for (const r of recipes) {
 }
 sql.push('');
 
-sql.push('-- Update auth_type + has_captcha + is_free on existing dirs to reflect recipe-derived values');
+sql.push('-- Update auth_type + has_captcha + is_free + submit_url on existing dirs to reflect recipe-derived values');
 for (const r of recipes) {
   if (!ORIGINAL_NAME_BY_SLUG[r.slug]) continue;
-  sql.push(`UPDATE directories SET auth_type=${sqlEscape(r.auth)}, has_captcha=${r.has_captcha}, is_free=${r.is_free} WHERE slug=${sqlEscape(r.slug)};`);
+  sql.push(`UPDATE directories SET auth_type=${sqlEscape(r.auth)}, has_captcha=${r.has_captcha}, is_free=${r.is_free}, submit_url=${sqlEscape(r.submit_url)} WHERE slug=${sqlEscape(r.slug)};`);
 }
 sql.push('');
 

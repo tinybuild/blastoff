@@ -17,7 +17,7 @@ UPDATE directories SET slug='betalist', ease='medium', ease_reason='mapped but 6
 UPDATE directories SET slug='indie-hackers', ease='medium', ease_reason='SPA — needs logged-in first-run capture' WHERE name='Indie Hackers';
 UPDATE directories SET slug='alternativeto', ease='easy', ease_reason='free + account, manual ~3d' WHERE name='AlternativeTo';
 UPDATE directories SET slug='saashub', ease='easy', ease_reason='free + account, manual ~2d' WHERE name='SaaSHub';
-UPDATE directories SET slug='devhunt', ease='easy', ease_reason='open-source form, real selectors mapped' WHERE name='DevHunt';
+UPDATE directories SET slug='devhunt', ease='hard', ease_reason='$49 wall on every launch week for next 13mo; one free slot exists ~June 2027' WHERE name='DevHunt';
 UPDATE directories SET slug='theres-an-ai-for-that', ease='hard', ease_reason='$49 min · Cloudflare · multi-step funnel' WHERE name='There''s an AI for That';
 UPDATE directories SET slug='futurepedia', ease='hard', ease_reason='$247 basic · $497 verified · no free path' WHERE name='Futurepedia';
 UPDATE directories SET slug='uneed', ease='medium', ease_reason='gated · slow free queue · also a competitor' WHERE name='Uneed';
@@ -44,22 +44,22 @@ INSERT OR IGNORE INTO directories (name, slug, url, submit_url, description, aut
 INSERT OR IGNORE INTO directories (name, slug, url, submit_url, description, auth_type, has_captcha, is_free, ease, ease_reason, status, priority) VALUES ('TinyLaunch', 'tinylaunch', 'https://www.tinylaunch.com', 'https://www.tinylaunch.com/submit', 'Weekly indie product launch board with badge for top 3 per week.', 'account (Email/Password or Google / GitHub / X OAuth)', 0, 1, 'medium', 'free + account-gated form, needs first-run capture', 'active', 40);
 INSERT OR IGNORE INTO directories (name, slug, url, submit_url, description, auth_type, has_captcha, is_free, ease, ease_reason, status, priority) VALUES ('Toolify', 'toolify', 'https://www.toolify.ai', 'https://www.toolify.ai/submit', 'Large AI tools directory, 29K+ tools, daily-updated discovery surface', 'account', 0, 1, 'medium', 'Account-gated form, large category dropdown, page is 403 to anonymous fetches', 'active', 40);
 
--- Update auth_type + has_captcha + is_free on existing dirs to reflect recipe-derived values
-UPDATE directories SET auth_type='account (AppSumo Partner Portal login after acceptance)', has_captcha=0, is_free=1 WHERE slug='appsumo';
-UPDATE directories SET auth_type='oauth (GitHub or Google via Supabase Auth)', has_captcha=0, is_free=1 WHERE slug='devhunt';
-UPDATE directories SET auth_type='account (Sign In / Join required to submit)', has_captcha=0, is_free=1 WHERE slug='fazier';
-UPDATE directories SET auth_type='account', has_captcha=0, is_free=0 WHERE slug='futurepedia';
-UPDATE directories SET auth_type='account', has_captcha=0, is_free=1 WHERE slug='goodfirms';
-UPDATE directories SET auth_type='account', has_captcha=0, is_free=1 WHERE slug='indie-hackers';
-UPDATE directories SET auth_type='none', has_captcha=1, is_free=1 WHERE slug='launching-next';
-UPDATE directories SET auth_type='account (signup required; "New Launch" CTA in nav)', has_captcha=0, is_free=1 WHERE slug='microlaunch';
-UPDATE directories SET auth_type='account (sign-in required for dashboard / submit form)', has_captcha=0, is_free=1 WHERE slug='openalternative';
-UPDATE directories SET auth_type='account (verified Peerlist profile required)', has_captcha=0, is_free=1 WHERE slug='peerlist';
-UPDATE directories SET auth_type='account (Gartner Digital Markets vendor portal; sales-led onboarding)', has_captcha=0, is_free=1 WHERE slug='software-advice';
-UPDATE directories SET auth_type='account (sign up required; Lightning / nostr / email)', has_captcha=0, is_free=0 WHERE slug='stacker-news';
-UPDATE directories SET auth_type='account', has_captcha=0, is_free=0 WHERE slug='tekpon';
-UPDATE directories SET auth_type='account (email verification — edit access granted post-submit via verified email)', has_captcha=0, is_free=0 WHERE slug='theres-an-ai-for-that';
-UPDATE directories SET auth_type='account', has_captcha=0, is_free=1 WHERE slug='uneed';
+-- Update auth_type + has_captcha + is_free + submit_url on existing dirs to reflect recipe-derived values
+UPDATE directories SET auth_type='account (AppSumo Partner Portal login after acceptance)', has_captcha=0, is_free=1, submit_url='https://sell.appsumo.com/' WHERE slug='appsumo';
+UPDATE directories SET auth_type='oauth (GitHub or Google via Supabase Auth)', has_captcha=0, is_free=1, submit_url='https://devhunt.org/account/tools/new' WHERE slug='devhunt';
+UPDATE directories SET auth_type='account (Sign In / Join required to submit)', has_captcha=0, is_free=1, submit_url='https://fazier.com/submit' WHERE slug='fazier';
+UPDATE directories SET auth_type='account', has_captcha=0, is_free=0, submit_url='https://www.futurepedia.io/submit-tool' WHERE slug='futurepedia';
+UPDATE directories SET auth_type='account', has_captcha=0, is_free=1, submit_url='https://www.goodfirms.co/add-product' WHERE slug='goodfirms';
+UPDATE directories SET auth_type='account', has_captcha=0, is_free=1, submit_url='https://www.indiehackers.com/products/new' WHERE slug='indie-hackers';
+UPDATE directories SET auth_type='none', has_captcha=1, is_free=1, submit_url='https://www.launchingnext.com/submit/' WHERE slug='launching-next';
+UPDATE directories SET auth_type='account (signup required; "New Launch" CTA in nav)', has_captcha=0, is_free=1, submit_url='https://microlaunch.net/submit' WHERE slug='microlaunch';
+UPDATE directories SET auth_type='account (sign-in required for dashboard / submit form)', has_captcha=0, is_free=1, submit_url='https://openalternative.co/submit' WHERE slug='openalternative';
+UPDATE directories SET auth_type='account (verified Peerlist profile required)', has_captcha=0, is_free=1, submit_url='https://peerlist.io/launchpad' WHERE slug='peerlist';
+UPDATE directories SET auth_type='account (Gartner Digital Markets vendor portal; sales-led onboarding)', has_captcha=0, is_free=1, submit_url='https://www.softwareadvice.com/vendor/signup/' WHERE slug='software-advice';
+UPDATE directories SET auth_type='account (sign up required; Lightning / nostr / email)', has_captcha=0, is_free=0, submit_url='https://stacker.news/post' WHERE slug='stacker-news';
+UPDATE directories SET auth_type='account', has_captcha=0, is_free=0, submit_url='https://tekpon.com/get-listed/' WHERE slug='tekpon';
+UPDATE directories SET auth_type='account (email verification — edit access granted post-submit via verified email)', has_captcha=0, is_free=0, submit_url='https://theresanaiforthat.com/submit/' WHERE slug='theres-an-ai-for-that';
+UPDATE directories SET auth_type='account', has_captcha=0, is_free=1, submit_url='https://uneed.best/submit-a-tool' WHERE slug='uneed';
 
 -- Clear and reseed directory_fields for the 25 recipe dirs (preserves the original 5)
 DELETE FROM directory_fields WHERE directory_id IN (SELECT id FROM directories WHERE slug IN ('appsumo', 'dang-ai', 'devhunt', 'f6s', 'fazier', 'firsto', 'futurepedia', 'goodfirms', 'indie-hackers', 'indiehunt', 'launching-next', 'microlaunch', 'open-launch', 'openalternative', 'peerlist', 'pitchwall', 'sidebar-io', 'sideprojectors', 'software-advice', 'stacker-news', 'tekpon', 'theres-an-ai-for-that', 'tinylaunch', 'toolify', 'uneed'));
@@ -97,11 +97,11 @@ INSERT INTO directory_fields (directory_id, field_name, field_label, is_required
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'url', 'Tool website URL', 1, NULL, NULL, '`input[name="tool_website"]`', 'URL regex validated', 3 FROM directories WHERE slug='devhunt';
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'github_url', 'GitHub repo URL', 0, NULL, NULL, '`input[name="github_repo"]`', 'URL regex validated', 4 FROM directories WHERE slug='devhunt';
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'description', 'Quick Description', 1, NULL, NULL, '`textarea[name="tool_description"]`', 'HTML supported', 5 FROM directories WHERE slug='devhunt';
-INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'pricing', 'Tool pricing type', 1, NULL, 'Free / Freemium / Paid / Free + From $X / Paid with Free Trial (loaded from Supabase `product_pricing_types`)', '`input[name="pricing-type"]` (radio)', 'exact list pulled live from DB', 6 FROM directories WHERE slug='devhunt';
+INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'pricing', 'Tool pricing type', 1, NULL, 'Free / Subscription / One time fee (verified live 2026-05-22; recipe previously listed 5 values that no longer exist)', '`input[name="pricing-type"]` (radio)', 'radios rendered as `<input type="radio">`; match by label text', 6 FROM directories WHERE slug='devhunt';
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'tags', 'Tool categories', 0, NULL, 'dev-tool taxonomy (live from Supabase)', 'CategoryInput component', 'multi-select autocomplete', 7 FROM directories WHERE slug='devhunt';
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'demo_video_url', 'Demo video', 0, NULL, NULL, '`input[name="demo_video"]`', 'YouTube or mp4 URL; auto-generated via paracast.io if empty', 8 FROM directories WHERE slug='devhunt';
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'screenshot_urls', 'Tool screenshots', 1, NULL, NULL, '`input[type="file"]` (ImagesUploader, max=5)', 'min 3 screenshots required; first is social preview, resized w=750', 9 FROM directories WHERE slug='devhunt';
-INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'launch_week', 'Launch week', 1, NULL, 'upcoming ISO weeks (free if <15 tools queued; $49 if 15+)', 'SelectLaunchDate component', 'drives free vs paid flow', 10 FROM directories WHERE slug='devhunt';
+INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'launch_week', 'Launch week', 1, NULL, 'upcoming ISO weeks; nearly all show 15+ queued = $49. Only sparse slots ~13 months out are free', '`select[name="launch_week"]` (combobox)', '$49 in practice; skill should warn the user before they pick a paid week', 10 FROM directories WHERE slug='devhunt';
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'name', 'Company name', 1, NULL, NULL, NULL, 'gated — needs account', 0 FROM directories WHERE slug='f6s';
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'tagline', 'One-liner', 1, NULL, NULL, NULL, 'gated', 1 FROM directories WHERE slug='f6s';
 INSERT INTO directory_fields (directory_id, field_name, field_label, is_required, max_length, dropdown_values, selector, notes, field_order) SELECT id, 'url', 'Website', 1, NULL, NULL, NULL, 'gated', 2 FROM directories WHERE slug='f6s';

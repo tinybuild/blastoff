@@ -5,7 +5,7 @@
 - **Auth:** oauth (GitHub or Google via Supabase Auth)
 - **Captcha:** no (none observed in source)
 - **Approval:** auto (listing publishes immediately; activates on chosen launch week — staff removes non-dev tools)
-- **Free:** yes (paid tier: $49 to launch a specific week when free queue full, or to skip to a paid week)
+- **Free:** practically no — every launch week for the next 13 months is $49 (one free slot exists 13 months out where the queue has <15 tools, but it's the exception not the rule)
 - **One-line:** Weekly Product Hunt-style launch board for developer tools.
 
 ## Fields
@@ -18,11 +18,11 @@
 | url | Tool website URL | yes | ? | — | `input[name="tool_website"]` | URL regex validated |
 | github_url | GitHub repo URL | no | ? | — | `input[name="github_repo"]` | URL regex validated |
 | description | Quick Description | yes | ? | — | `textarea[name="tool_description"]` | HTML supported |
-| pricing | Tool pricing type | yes | — | Free / Freemium / Paid / Free + From $X / Paid with Free Trial (loaded from Supabase `product_pricing_types`) | `input[name="pricing-type"]` (radio) | exact list pulled live from DB |
+| pricing | Tool pricing type | yes | — | Free / Subscription / One time fee (verified live 2026-05-22; recipe previously listed 5 values that no longer exist) | `input[name="pricing-type"]` (radio) | radios rendered as `<input type="radio">`; match by label text |
 | tags | Tool categories | no | — | dev-tool taxonomy (live from Supabase) | CategoryInput component | multi-select autocomplete |
 | demo_video_url | Demo video | no | ? | — | `input[name="demo_video"]` | YouTube or mp4 URL; auto-generated via paracast.io if empty |
 | screenshot_urls | Tool screenshots | yes | — | — | `input[type="file"]` (ImagesUploader, max=5) | min 3 screenshots required; first is social preview, resized w=750 |
-| launch_week | Launch week | yes | — | upcoming ISO weeks (free if <15 tools queued; $49 if 15+) | SelectLaunchDate component | drives free vs paid flow |
+| launch_week | Launch week | yes | — | upcoming ISO weeks; nearly all show 15+ queued = $49. Only sparse slots ~13 months out are free | `select[name="launch_week"]` (combobox) | $49 in practice; skill should warn the user before they pick a paid week |
 
 ## Gotchas
 
@@ -35,6 +35,7 @@
 - Optional ProductHunt import modal exists: paste a PH slug and the form auto-fills name / slogan / description / logo / screenshots. Useful as a fallback signal for the autofill engine.
 - Hard rule shown at top of form: "Any non-dev tools will be subject to removal." Staff post-moderates and yanks off-topic listings.
 - Submission also pings a Discord webhook (announcement only — no approval queue).
+- **Live-verified 2026-05-22:** form is at `/account/tools/new` (not `/submit` — that 404s). Pricing radios are only `Free / Subscription / One time fee` (not the 5 values the Supabase schema docs suggest). Launch week is $49 for every slot in the next year except a single free slot 13 months out. Form fill on the visible fields (name, slogan, website, description, pricing radio) works cleanly via claude-in-chrome.
 
 ## Sources
 
