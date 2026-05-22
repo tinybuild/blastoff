@@ -51,7 +51,7 @@ function render() {
   $('#cockpit-main').hidden = false;
   const p = state.product;
   $('#product-name').textContent = p.name || '(unnamed)';
-  $('#product-tagline').textContent = p.tagline || '';
+  $('#product-tagline').textContent = p.title || '';
   $('#product-url').textContent = p.url || '';
   $('#product-url').href = p.url || '#';
 

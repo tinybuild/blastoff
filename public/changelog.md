@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-22 — Three variants, not five
+
+The taglines section drops the directory-specific labels. Instead of "Product Hunt tagline / Show HN title / BetaList one-sentence / Short description / Long description," you get three semantic types: **Title** (60 chars), **One sentence** (140 chars), **Description** (paragraph form). The agent regenerates ad-hoc through `/api/regenerate` when a directory wants a tighter cap — no need to pre-cook a variant for every spec.
+
 ## 2026-05-22 — Frame your screenshots, ready to ship
 
 Drop a raw screenshot, and BlastOff now also generates a framed version — the same gradient, padding, and shadow you see in the gallery, baked into a clean PNG. Both files are stored: raw for re-framing later, framed for dragging straight into any directory's upload box. Every card gets a download arrow that grabs the framed PNG with your product name pre-filled in the filename.

@@ -67,11 +67,10 @@ async function handleAPI(path, request, env) {
 
     const n = (v) => (v === undefined ? null : v);
     const result = await env.DB.prepare(`
-      INSERT INTO products (url, name, tagline, tagline_80, tagline_140, description, long_description, logo_url, screenshot_url, pricing, category, tags, founder_name, founder_email, twitter_url, github_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (url, name, title, one_sentence, description, logo_url, screenshot_url, pricing, category, tags, founder_name, founder_email, twitter_url, github_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      normalizedUrl, n(data.name), n(data.tagline), n(data.tagline_80), n(data.tagline_140),
-      n(data.description), n(data.long_description),
+      normalizedUrl, n(data.name), n(data.title), n(data.one_sentence), n(data.description),
       n(data.logo_url), n(data.screenshot_url), n(data.pricing), n(data.category), n(data.tags),
       n(data.founder_name), n(data.founder_email), n(data.twitter_url), n(data.github_url)
     ).run();
@@ -123,15 +122,13 @@ async function handleAPI(path, request, env) {
     const n = (v) => (v === undefined ? null : v);
     await env.DB.prepare(`
       UPDATE products SET
-        name = ?, tagline = ?, tagline_80 = ?, tagline_140 = ?,
-        description = ?, long_description = ?,
+        name = ?, title = ?, one_sentence = ?, description = ?,
         logo_url = ?, screenshot_url = ?, pricing = ?, category = ?,
         tags = ?, founder_name = ?, founder_email = ?, twitter_url = ?,
         github_url = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(
-      n(data.name), n(data.tagline), n(data.tagline_80), n(data.tagline_140),
-      n(data.description), n(data.long_description),
+      n(data.name), n(data.title), n(data.one_sentence), n(data.description),
       n(data.logo_url), n(data.screenshot_url), n(data.pricing), n(data.category),
       n(data.tags), n(data.founder_name), n(data.founder_email), n(data.twitter_url),
       n(data.github_url), id
@@ -174,6 +171,25 @@ async function handleAPI(path, request, env) {
   if (path === '/api/directories' && request.method === 'GET') {
     const { results } = await env.DB.prepare('SELECT * FROM directories WHERE status = ? ORDER BY priority DESC').bind('active').all();
     return Response.json(results);
+  }
+
+  // Download a screenshot from R2 with Content-Disposition so the browser saves it instead
+  // of rendering inline. The `download` HTML attribute is ignored on cross-origin links,
+  // so the gallery links here and we proxy the bytes through with the right headers.
+  if (path === '/api/download' && request.method === 'GET') {
+    const u = new URL(request.url);
+    const key = u.searchParams.get('key');
+    const name = u.searchParams.get('name') || 'screenshot.png';
+    if (!key) return Response.json({ error: 'key required' }, { status: 400 });
+    const obj = await env.SCREENSHOTS.get(key);
+    if (!obj) return Response.json({ error: 'Not found' }, { status: 404 });
+    return new Response(obj.body, {
+      headers: {
+        'Content-Type': obj.httpMetadata?.contentType || 'image/png',
+        'Content-Disposition': `attachment; filename="${name.replace(/"/g, '')}"`,
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
   }
 
   // Upload a screenshot to R2 and attach to a product. Accepts an optional `framed` blob;
@@ -384,9 +400,9 @@ async function extractFromURL(targetUrl, env) {
     scraped = {
       url: targetUrl,
       name,
-      tagline: '',
-      description,
-      long_description: paragraphs.slice(0, 3).join('\n\n'),
+      title: '',
+      one_sentence: '',
+      description: paragraphs.slice(0, 3).join('\n\n') || description,
       logo_url: resolveUrl(favicon),
       screenshot_url: resolveUrl(image),
       pricing: '',
@@ -403,7 +419,7 @@ async function extractFromURL(targetUrl, env) {
   // Detect Cloudflare error pages and clear bad scraped data
   const isErrorPage = html.includes('Error code:') || html.includes('error code: 1042') || html.includes('522: Connection timed out');
   if (isErrorPage) {
-    scraped = { url: targetUrl, name: '', tagline: '', description: '', long_description: '', logo_url: '', screenshot_url: '', pricing: '', category: '', tags: '', founder_name: '', founder_email: '', twitter_url: '', github_url: '' };
+    scraped = { url: targetUrl, name: '', title: '', one_sentence: '', description: '', logo_url: '', screenshot_url: '', pricing: '', category: '', tags: '', founder_name: '', founder_email: '', twitter_url: '', github_url: '' };
     fetchError = 'Cloudflare same-account Worker fetch blocked (error 1042)';
   }
 
@@ -417,7 +433,7 @@ async function extractFromURL(targetUrl, env) {
     .trim()
     .substring(0, 4000);
 
-  // Always run AI for the tagline variants + long_description — the variants are core value
+  // Always run AI for the title + one_sentence + description — the variants are core value
   if (plainText || fetchError) {
     try {
       const prompt = `You are a product analyst writing copy for launch directory submissions.
@@ -432,14 +448,12 @@ Already extracted:
 - Name: ${scraped.name || '(missing)'}
 - Description: ${scraped.description || '(missing)'}
 
-Return a JSON object with ONLY these fields. Every tagline variant must be a complete sentence under its character limit — count characters carefully:
+Return a JSON object with ONLY these fields. Every variant must be a complete, polished sentence under its character ceiling — count characters carefully:
 {
   "name": "Product name (short, no tagline)",
-  "tagline_60": "Tagline under 60 chars (Product Hunt limit)",
-  "tagline_80": "Tagline under 80 chars (Hacker News Show HN title limit)",
-  "tagline_140": "Tagline under 140 chars (BetaList one-sentence pitch)",
-  "description": "2-3 sentence description, under 260 chars (Product Hunt card)",
-  "long_description": "Detailed 2-paragraph description of the product, what it does, who it's for",
+  "title": "Punchy headline under 60 chars (use for Product Hunt, Hacker News, headlines)",
+  "one_sentence": "One full sentence pitch under 140 chars with a hook (use for BetaList, AlternativeTo, SaaSHub one-liner slots)",
+  "description": "Detailed 2-paragraph description: what it does, who it's for. No length cap — write it like a press blurb.",
   "category": "One of: SaaS, Developer Tool, AI Tool, Marketplace, Productivity, Design, Analytics, Marketing, Communication, Other",
   "tags": "comma-separated relevant tags (5-8 tags)",
   "pricing": "Free, Freemium, Paid, or specific pricing info"
@@ -457,11 +471,9 @@ Return a JSON object with ONLY these fields. Every tagline variant must be a com
       if (jsonMatch) {
         const aiData = JSON.parse(jsonMatch[0]);
         if (!scraped.name && aiData.name) scraped.name = aiData.name;
-        if (aiData.tagline_60) scraped.tagline = trimToLimit(aiData.tagline_60, 60);
-        if (aiData.tagline_80) scraped.tagline_80 = trimToLimit(aiData.tagline_80, 80);
-        if (aiData.tagline_140) scraped.tagline_140 = trimToLimit(aiData.tagline_140, 140);
-        if (aiData.description) scraped.description = trimToLimit(aiData.description, 260);
-        if (aiData.long_description) scraped.long_description = aiData.long_description;
+        if (aiData.title) scraped.title = trimToLimit(aiData.title, 60);
+        if (aiData.one_sentence) scraped.one_sentence = trimToLimit(aiData.one_sentence, 140);
+        if (aiData.description) scraped.description = aiData.description;
         if (!scraped.category && aiData.category) scraped.category = aiData.category;
         if (!scraped.tags && aiData.tags) scraped.tags = aiData.tags;
         if (!scraped.pricing && aiData.pricing) scraped.pricing = aiData.pricing;
@@ -471,12 +483,12 @@ Return a JSON object with ONLY these fields. Every tagline variant must be a com
     }
   }
 
-  // Belt-and-braces fallback: derive 60 from description if AI dropped it
-  if (!scraped.tagline && scraped.description) {
-    let tagline = scraped.description;
-    const firstSentence = tagline.match(/^[^.!?]+[.!?]/);
-    if (firstSentence) tagline = firstSentence[0];
-    scraped.tagline = trimToLimit(tagline, 60);
+  // Belt-and-braces fallback: derive title from description if AI dropped it
+  if (!scraped.title && scraped.description) {
+    let title = scraped.description;
+    const firstSentence = title.match(/^[^.!?]+[.!?]/);
+    if (firstSentence) title = firstSentence[0];
+    scraped.title = trimToLimit(title, 60);
   }
 
   if (fetchError && !scraped._ai_error) scraped._fetch_note = 'Page fetch failed, data generated by AI from URL context';
@@ -529,11 +541,9 @@ function trimToLimit(str, limit) {
 }
 
 const FIELD_SPECS = {
-  tagline: { label: 'tagline', limit: 60, voice: 'punchy, one-line pitch, no period at end' },
-  tagline_80: { label: 'tagline', limit: 80, voice: 'one-line pitch, room for a verb + benefit' },
-  tagline_140: { label: 'tagline', limit: 140, voice: 'one full sentence pitch with a hook' },
-  description: { label: 'short description', limit: 260, voice: '2-3 sentences for a launch card' },
-  long_description: { label: 'long description', limit: 1200, voice: '2 short paragraphs: what it does, who it is for' },
+  title: { label: 'title', limit: 60, voice: 'punchy headline, no period at end' },
+  one_sentence: { label: 'one-sentence pitch', limit: 140, voice: 'one full sentence with a hook' },
+  description: { label: 'description', limit: 1200, voice: '2 short paragraphs: what it does, who it is for' },
 };
 
 async function regenerateField(product, field, charLimit, env) {
@@ -544,9 +554,9 @@ async function regenerateField(product, field, charLimit, env) {
   const context = [
     `Product: ${product.name || 'Unnamed'}`,
     product.url ? `URL: ${product.url}` : null,
-    product.tagline ? `Current 60-char tagline: ${product.tagline}` : null,
-    product.description ? `Short description: ${product.description}` : null,
-    product.long_description ? `Long description: ${product.long_description}` : null,
+    product.title ? `Current title: ${product.title}` : null,
+    product.one_sentence ? `One-sentence pitch: ${product.one_sentence}` : null,
+    product.description ? `Description: ${product.description}` : null,
     product.category ? `Category: ${product.category}` : null,
     product.tags ? `Tags: ${product.tags}` : null,
     product.pricing ? `Pricing: ${product.pricing}` : null,
@@ -586,7 +596,7 @@ const MCP_SERVER_CARD = {
 const MCP_TOOLS = [
   {
     name: 'get_profile',
-    description: 'Get a saved product profile by URL. Returns name, taglines at 60/80/140 char lengths, descriptions, pricing, category, tags, founder fields. Profile must be extracted first via extract_from_url or the BlastOff dashboard.',
+    description: 'Get a saved product profile by URL. Returns name, title (60-char punchy headline), one_sentence (140-char pitch), description (paragraph form), pricing, category, tags, founder fields, screenshots. Profile must be extracted first via extract_from_url or the BlastOff dashboard.',
     inputSchema: {
       type: 'object',
       properties: { url: { type: 'string', description: 'Product website URL' } },
@@ -609,12 +619,12 @@ const MCP_TOOLS = [
   },
   {
     name: 'generate_variants',
-    description: 'Generate or regenerate a copy variant for a product field at a specific character limit. Use to fit Product Hunt (60 char tagline), Hacker News (80 char title), BetaList (140 char one-liner), or the 260-char card description. Returns the new value; does NOT save it.',
+    description: 'Generate or regenerate a copy variant for a product field at a specific character limit. Three semantic fields: title (default 60), one_sentence (default 140), description (no fixed cap). Pass char_limit to fit a specific directory cap. Returns the new value; does NOT save it.',
     inputSchema: {
       type: 'object',
       properties: {
         url: { type: 'string', description: 'Product URL' },
-        field: { type: 'string', enum: ['tagline', 'tagline_80', 'tagline_140', 'description', 'long_description'], description: 'Which field to regenerate' },
+        field: { type: 'string', enum: ['title', 'one_sentence', 'description'], description: 'Which field to regenerate' },
         char_limit: { type: 'number', description: 'Optional override for the default char limit of the field' },
       },
       required: ['url', 'field'],
@@ -622,7 +632,7 @@ const MCP_TOOLS = [
   },
   {
     name: 'extract_from_url',
-    description: 'Run the full extractor on a product URL: scrapes the page, fills gaps with AI (name, tagline variants, description, category, tags, pricing), creates or updates the product in BlastOff. Returns the saved profile. Costs Claude tokens — expensive call.',
+    description: 'Run the full extractor on a product URL: scrapes the page, fills gaps with AI (name, title, one_sentence, description, category, tags, pricing), creates or updates the product in BlastOff. Returns the saved profile. Costs Claude tokens — expensive call.',
     inputSchema: {
       type: 'object',
       properties: { url: { type: 'string', description: 'Product website URL' } },
@@ -755,23 +765,21 @@ async function callMCPTool(name, args, env) {
     const existing = await env.DB.prepare('SELECT id FROM products WHERE url = ?').bind(normalized).first();
     if (existing) {
       await env.DB.prepare(`
-        UPDATE products SET name=?, tagline=?, tagline_80=?, tagline_140=?, description=?, long_description=?,
+        UPDATE products SET name=?, title=?, one_sentence=?, description=?,
           logo_url=?, screenshot_url=?, pricing=?, category=?, tags=?, founder_name=?, founder_email=?,
           twitter_url=?, github_url=?, updated_at=CURRENT_TIMESTAMP WHERE url=?
       `).bind(
-        n(product.name), n(product.tagline), n(product.tagline_80), n(product.tagline_140),
-        n(product.description), n(product.long_description),
+        n(product.name), n(product.title), n(product.one_sentence), n(product.description),
         n(product.logo_url), n(product.screenshot_url), n(product.pricing), n(product.category),
         n(product.tags), n(product.founder_name), n(product.founder_email),
         n(product.twitter_url), n(product.github_url), normalized
       ).run();
     } else {
       const result = await env.DB.prepare(`
-        INSERT INTO products (url, name, tagline, tagline_80, tagline_140, description, long_description, logo_url, screenshot_url, pricing, category, tags, founder_name, founder_email, twitter_url, github_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO products (url, name, title, one_sentence, description, logo_url, screenshot_url, pricing, category, tags, founder_name, founder_email, twitter_url, github_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
-        normalized, n(product.name), n(product.tagline), n(product.tagline_80), n(product.tagline_140),
-        n(product.description), n(product.long_description),
+        normalized, n(product.name), n(product.title), n(product.one_sentence), n(product.description),
         n(product.logo_url), n(product.screenshot_url), n(product.pricing), n(product.category),
         n(product.tags), n(product.founder_name), n(product.founder_email), n(product.twitter_url), n(product.github_url)
       ).run();

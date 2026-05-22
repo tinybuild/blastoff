@@ -77,7 +77,7 @@ function populateExtractedProduct(product) {
 
   // Header display
   document.getElementById('product-display-name').textContent = product.name || 'Untitled';
-  document.getElementById('product-display-tagline').textContent = product.tagline || 'No 60-char tagline yet';
+  document.getElementById('product-display-tagline').textContent = product.title || 'No title yet';
   const urlEl = document.getElementById('product-display-url');
   urlEl.textContent = product.url;
   urlEl.href = product.url;
@@ -105,8 +105,11 @@ function renderScreenshots(shots) {
   shots.forEach((s, i) => {
     const shot = typeof s === 'string' ? { raw: s, framed: null } : s;
     const display = shot.framed || shot.raw;
-    const downloadUrl = shot.framed || shot.raw;
     const downloadName = `${currentProduct?.name || 'screenshot'}-${i + 1}.png`.replace(/\s+/g, '-').toLowerCase();
+    // Strip the R2 public-URL prefix to get the bucket key, then route through the Worker
+    // so Content-Disposition triggers a real download instead of an inline render.
+    const downloadKey = (shot.framed || shot.raw).split('.r2.dev/')[1] || '';
+    const downloadUrl = `${API}/api/download?key=${encodeURIComponent(downloadKey)}&name=${encodeURIComponent(downloadName)}`;
     const card = document.createElement('div');
     card.className = 'screenshot-card';
     card.innerHTML = `
@@ -116,7 +119,7 @@ function renderScreenshots(shots) {
       <div class="screenshot-meta">
         <span class="screenshot-index">${i === 0 ? 'Hero · ' : ''}${i + 1} of ${shots.length}</span>
         <span class="screenshot-actions">
-          <a class="screenshot-download" href="${esc(downloadUrl)}" download="${esc(downloadName)}" title="Download ${shot.framed ? 'framed' : 'raw'} PNG">↓</a>
+          <a class="screenshot-download" href="${esc(downloadUrl)}" title="Download ${shot.framed ? 'framed' : 'raw'} PNG">↓</a>
           <button class="screenshot-remove" data-url="${esc(shot.raw)}" title="Remove">×</button>
         </span>
       </div>
@@ -281,9 +284,9 @@ function refreshVariantRow(row) {
   row.classList.toggle('row-empty', len === 0);
   row.classList.toggle('row-over', !!limit && len > limit);
 
-  // Mirror 60-char tagline into header preview
-  if (input.dataset.field === 'tagline') {
-    document.getElementById('product-display-tagline').textContent = input.value || 'No 60-char tagline yet';
+  // Mirror title into header preview
+  if (input.dataset.field === 'title') {
+    document.getElementById('product-display-tagline').textContent = input.value || 'No title yet';
   }
   if (input.dataset.field === 'name') {
     document.getElementById('product-display-name').textContent = input.value || 'Untitled';
@@ -406,7 +409,7 @@ function renderProductDetail(product, submissions, fields) {
         : '<div class="product-logo-placeholder">?</div>'}
       <div class="product-info">
         <h2>${esc(product.name || 'Untitled')}</h2>
-        <div class="tagline">${esc(product.tagline || '')}</div>
+        <div class="tagline">${esc(product.title || '')}</div>
         <a class="product-url" href="${esc(product.url)}" target="_blank">${esc(product.url)}</a>
       </div>
     </div>
@@ -545,7 +548,7 @@ async function loadProducts() {
           : '<div class="product-row-logo"></div>'}
         <div class="product-row-info">
           <h3>${esc(p.name || 'Untitled')}</h3>
-          <p>${esc(p.tagline || p.url)}</p>
+          <p>${esc(p.title || p.url)}</p>
         </div>
       </div>
     `).join('');
