@@ -176,10 +176,12 @@ async function handleAPI(path, request, env) {
     return Response.json(results);
   }
 
-  // Upload a screenshot to R2 and attach to a product
+  // Upload a screenshot to R2 and attach to a product. Accepts an optional `framed` blob;
+  // when present, stores both the raw and the framed PNG as a {raw, framed} pair.
   if (path === '/api/upload' && request.method === 'POST') {
     const formData = await request.formData();
     const file = formData.get('file');
+    const framed = formData.get('framed');
     const productId = formData.get('product_id');
     if (!file || !productId) {
       return Response.json({ error: 'file and product_id required' }, { status: 400 });
@@ -189,24 +191,34 @@ async function handleAPI(path, request, env) {
       return Response.json({ error: 'Only image uploads allowed' }, { status: 400 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
+    const rawBuffer = await file.arrayBuffer();
     const ext = (file.name || '').split('.').pop()?.toLowerCase() || 'png';
-    const key = `products/${productId}/${crypto.randomUUID()}.${ext}`;
-    await env.SCREENSHOTS.put(key, arrayBuffer, { httpMetadata: { contentType } });
+    const rawKey = `products/${productId}/${crypto.randomUUID()}.${ext}`;
+    await env.SCREENSHOTS.put(rawKey, rawBuffer, { httpMetadata: { contentType } });
+    const rawUrl = `${env.R2_PUBLIC_URL}/${rawKey}`;
 
-    const publicUrl = `${env.R2_PUBLIC_URL}/${key}`;
+    let framedUrl = null;
+    if (framed) {
+      const framedBuffer = await framed.arrayBuffer();
+      const framedKey = `products/${productId}/${crypto.randomUUID()}-framed.png`;
+      await env.SCREENSHOTS.put(framedKey, framedBuffer, { httpMetadata: { contentType: 'image/png' } });
+      framedUrl = `${env.R2_PUBLIC_URL}/${framedKey}`;
+    }
+
     const product = await env.DB.prepare('SELECT screenshots FROM products WHERE id = ?').bind(productId).first();
     if (!product) return Response.json({ error: 'Product not found' }, { status: 404 });
 
     let shots = [];
     try { shots = JSON.parse(product.screenshots || '[]'); } catch { shots = []; }
-    shots.push(publicUrl);
+    shots = shots.map(s => typeof s === 'string' ? { raw: s, framed: null } : s);
+    shots.push({ raw: rawUrl, framed: framedUrl });
     await env.DB.prepare('UPDATE products SET screenshots = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(JSON.stringify(shots), productId).run();
 
-    return Response.json({ url: publicUrl, key, screenshots: shots });
+    return Response.json({ raw: rawUrl, framed: framedUrl, screenshots: shots });
   }
 
-  // Remove a screenshot from a product's screenshots array (does not delete from R2)
+  // Remove a screenshot from a product's screenshots array. Identified by the raw URL
+  // (the canonical key — framed may be null or change if we re-render later).
   if (path === '/api/upload' && request.method === 'DELETE') {
     const { product_id, url } = await request.json();
     if (!product_id || !url) return Response.json({ error: 'product_id and url required' }, { status: 400 });
@@ -214,7 +226,9 @@ async function handleAPI(path, request, env) {
     if (!product) return Response.json({ error: 'Product not found' }, { status: 404 });
     let shots = [];
     try { shots = JSON.parse(product.screenshots || '[]'); } catch { shots = []; }
-    shots = shots.filter(u => u !== url);
+    shots = shots
+      .map(s => typeof s === 'string' ? { raw: s, framed: null } : s)
+      .filter(s => s.raw !== url);
     await env.DB.prepare('UPDATE products SET screenshots = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(JSON.stringify(shots), product_id).run();
     return Response.json({ screenshots: shots });
   }
@@ -474,6 +488,8 @@ function parseProduct(p) {
   if (!p) return p;
   let screenshots = [];
   try { screenshots = JSON.parse(p.screenshots || '[]'); if (!Array.isArray(screenshots)) screenshots = []; } catch { screenshots = []; }
+  // Normalize legacy string entries to {raw, framed:null} so the client gets one shape
+  screenshots = screenshots.map(s => typeof s === 'string' ? { raw: s, framed: null } : s);
   return { ...p, screenshots };
 }
 

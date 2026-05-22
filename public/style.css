@@ -921,12 +921,34 @@ body {
   background: #fff;
 }
 
+/* When the image already has the gradient frame baked in, drop the CSS frame so it's not doubled. */
+.screenshot-frame.is-prerendered {
+  background: transparent;
+  padding: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(255, 72, 0, 0.08);
+}
+.screenshot-frame.is-prerendered img {
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
 .screenshot-meta {
   display: flex; justify-content: space-between; align-items: center;
   font-size: 11px; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 .screenshot-index { font-weight: 500; }
+.screenshot-actions { display: inline-flex; gap: 2px; align-items: center; }
+.screenshot-download {
+  display: inline-flex; align-items: center; justify-content: center;
+  text-decoration: none;
+  color: var(--text-muted); font-size: 14px; line-height: 1;
+  padding: 4px 8px; border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+}
+.screenshot-download:hover {
+  background: #fff1e8; color: var(--primary);
+}
 .screenshot-remove {
   background: none; border: none; cursor: pointer;
   color: var(--text-muted); font-size: 18px; line-height: 1;

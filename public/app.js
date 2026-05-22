@@ -97,24 +97,100 @@ function populateExtractedProduct(product) {
 
 // ─── Screenshots ───────────────────────────────────────────────
 
-function renderScreenshots(urls) {
+// Each entry is {raw, framed}. Legacy strings still arrive from the API normalized as objects.
+function renderScreenshots(shots) {
   const gallery = document.getElementById('screenshots-gallery');
   if (!gallery) return;
   gallery.innerHTML = '';
-  urls.forEach((url, i) => {
+  shots.forEach((s, i) => {
+    const shot = typeof s === 'string' ? { raw: s, framed: null } : s;
+    const display = shot.framed || shot.raw;
+    const downloadUrl = shot.framed || shot.raw;
+    const downloadName = `${currentProduct?.name || 'screenshot'}-${i + 1}.png`.replace(/\s+/g, '-').toLowerCase();
     const card = document.createElement('div');
     card.className = 'screenshot-card';
     card.innerHTML = `
-      <div class="screenshot-frame">
-        <img src="${esc(url)}" alt="Screenshot ${i + 1}" loading="lazy">
+      <div class="screenshot-frame ${shot.framed ? 'is-prerendered' : ''}">
+        <img src="${esc(display)}" alt="Screenshot ${i + 1}" loading="lazy">
       </div>
       <div class="screenshot-meta">
-        <span class="screenshot-index">${i === 0 ? 'Hero · ' : ''}${i + 1} of ${urls.length}</span>
-        <button class="screenshot-remove" data-url="${esc(url)}" title="Remove">×</button>
+        <span class="screenshot-index">${i === 0 ? 'Hero · ' : ''}${i + 1} of ${shots.length}</span>
+        <span class="screenshot-actions">
+          <a class="screenshot-download" href="${esc(downloadUrl)}" download="${esc(downloadName)}" title="Download ${shot.framed ? 'framed' : 'raw'} PNG">↓</a>
+          <button class="screenshot-remove" data-url="${esc(shot.raw)}" title="Remove">×</button>
+        </span>
       </div>
     `;
     gallery.appendChild(card);
   });
+}
+
+// Render the screenshot inside BlastOff's signature frame on a canvas.
+// Returns a PNG Blob. Output is 1600×1000 — fits 16:10 directories cleanly.
+async function generateFramedPng(file) {
+  const img = await new Promise((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = reject;
+    el.src = URL.createObjectURL(file);
+  });
+  const W = 1600, H = 1000;
+  const PAD = 102;
+  const OUTER_R = 40;
+  const INNER_R = 20;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Outer rounded clip + gradient background
+  roundRectPath(ctx, 0, 0, W, H, OUTER_R);
+  ctx.clip();
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#ffeed9');
+  grad.addColorStop(0.5, '#ffd9c0');
+  grad.addColorStop(1, '#ffb89a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Inner image area + drop shadow
+  const ix = PAD, iy = PAD, iw = W - PAD * 2, ih = H - PAD * 2;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.18)';
+  ctx.shadowBlur = 32;
+  ctx.shadowOffsetY = 10;
+  ctx.fillStyle = '#fff';
+  roundRectPath(ctx, ix, iy, iw, ih, INNER_R);
+  ctx.fill();
+  ctx.restore();
+
+  // Clip to inner rounded rect, draw image with object-fit: cover semantics
+  ctx.save();
+  roundRectPath(ctx, ix, iy, iw, ih, INNER_R);
+  ctx.clip();
+  const imgAR = img.naturalWidth / img.naturalHeight;
+  const innerAR = iw / ih;
+  let dw, dh, dx, dy;
+  if (imgAR > innerAR) {
+    dh = ih; dw = dh * imgAR; dx = ix + (iw - dw) / 2; dy = iy;
+  } else {
+    dw = iw; dh = dw / imgAR; dx = ix; dy = iy + (ih - dh) / 2;
+  }
+  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.restore();
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/png');
+  });
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 async function uploadScreenshot(file) {
@@ -126,9 +202,13 @@ async function uploadScreenshot(file) {
     setSaveStatus('Only images allowed', true);
     return;
   }
+  setSaveStatus('Framing…');
+  let framed = null;
+  try { framed = await generateFramedPng(file); } catch (err) { console.warn('Frame generation failed, uploading raw only', err); }
   setSaveStatus('Uploading…');
   const fd = new FormData();
   fd.append('file', file);
+  if (framed) fd.append('framed', framed, 'framed.png');
   fd.append('product_id', currentProduct._id);
   try {
     const res = await fetch(`${API}/api/upload`, { method: 'POST', body: fd });
