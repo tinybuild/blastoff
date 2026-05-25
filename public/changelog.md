@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-25 — Five directories, not thirty
+
+The Cockpit now leads with the five directories that are free, won't get you banned, and accept a real form fill: **BetaList**, **Indie Hackers**, **AlternativeTo**, **Peerlist**, **SideProjectors**. Everything else — paid walls, sales-led onboarding, judgment-heavy launches like Product Hunt and Hacker News — moves into a "more directories" disclosure below. The full thirty are still there when you want them, just out of the way for the everyday submit-five-things-this-week loop. The ease filter row is gone too; with five hand-picked rows, there's nothing to filter.
+
 ## 2026-05-22 — Three variants, not five
 
 The taglines section drops the directory-specific labels. Instead of "Product Hunt tagline / Show HN title / BetaList one-sentence / Short description / Long description," you get three semantic types: **Title** (60 chars), **One sentence** (140 chars), **Description** (paragraph form). The agent regenerates ad-hoc through `/api/regenerate` when a directory wants a tighter cap — no need to pre-cook a variant for every spec.

@@ -38,33 +38,26 @@
         </div>
         <div class="cockpit-counts">
           <div class="cockpit-count">
-            <div class="cockpit-count-num" id="count-easy">0</div>
-            <div class="cockpit-count-label">🟢 ready</div>
+            <div class="cockpit-count-num" id="count-ready">0/5</div>
+            <div class="cockpit-count-label">ready</div>
           </div>
           <div class="cockpit-count">
-            <div class="cockpit-count-num" id="count-medium">0</div>
-            <div class="cockpit-count-label">🟡 medium</div>
-          </div>
-          <div class="cockpit-count">
-            <div class="cockpit-count-num" id="count-hard">0</div>
-            <div class="cockpit-count-label">🔴 hard</div>
-          </div>
-          <div class="cockpit-count">
-            <div class="cockpit-count-num" id="count-done">0</div>
-            <div class="cockpit-count-label">✓ done</div>
+            <div class="cockpit-count-num" id="count-done">0/5</div>
+            <div class="cockpit-count-label">submitted</div>
           </div>
         </div>
       </header>
 
-      <nav class="cockpit-filters" id="filters">
-        <button class="cockpit-filter is-active" data-filter="all">All</button>
-        <button class="cockpit-filter" data-filter="easy">🟢 Easy</button>
-        <button class="cockpit-filter" data-filter="medium">🟡 Medium</button>
-        <button class="cockpit-filter" data-filter="hard">🔴 Hard</button>
-        <button class="cockpit-filter" data-filter="done">✓ Done</button>
-      </nav>
-
       <main class="cockpit-grid" id="grid"></main>
+
+      <details class="cockpit-more">
+        <summary class="cockpit-more-summary">
+          <span class="cockpit-more-chev">▸</span>
+          <span><span id="more-count">0</span> more directories</span>
+          <span class="cockpit-more-hint">paid, sales-led, or higher-judgment launches</span>
+        </summary>
+        <main class="cockpit-grid" id="more-grid"></main>
+      </details>
     </div>
 
     <div id="cockpit-error" class="cockpit-error" hidden>

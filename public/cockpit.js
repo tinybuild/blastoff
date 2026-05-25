@@ -3,10 +3,13 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+// The 5 directories we ship as the default focus. Order matters — renders top-to-bottom in this sequence.
+// Free + low ban risk + form-friendly. The rest live under "more directories".
+const TOP_SLUGS = ['betalist', 'indie-hackers', 'alternativeto', 'peerlist', 'sideprojectors'];
+
 const state = {
   product: null,
   directories: [],
-  filter: 'all',
 };
 
 function getProductUrl() {
@@ -59,30 +62,34 @@ function render() {
   renderGrid();
 }
 
-function renderCounts() {
-  const all = state.directories;
-  $('#count-easy').textContent = all.filter(d => d.ease === 'easy' && !d.is_done).length;
-  $('#count-medium').textContent = all.filter(d => d.ease === 'medium' && !d.is_done).length;
-  $('#count-hard').textContent = all.filter(d => d.ease === 'hard' && !d.is_done).length;
-  $('#count-done').textContent = all.filter(d => d.is_done).length;
+function splitDirectories() {
+  const bySlug = new Map(state.directories.map(d => [d.slug, d]));
+  const top = TOP_SLUGS.map(slug => bySlug.get(slug)).filter(Boolean);
+  const topSlugSet = new Set(TOP_SLUGS);
+  const more = state.directories.filter(d => !topSlugSet.has(d.slug));
+  return { top, more };
 }
 
-function filteredDirectories() {
-  const f = state.filter;
-  if (f === 'all') return state.directories;
-  if (f === 'done') return state.directories.filter(d => d.is_done);
-  return state.directories.filter(d => d.ease === f && !d.is_done);
+function renderCounts() {
+  const { top } = splitDirectories();
+  const total = top.length;
+  const ready = top.filter(d => d.fields_total > 0 && d.fields_ready === d.fields_total).length;
+  const done = top.filter(d => d.is_done).length;
+  $('#count-ready').textContent = `${ready}/${total}`;
+  $('#count-done').textContent = `${done}/${total}`;
 }
 
 function renderGrid() {
+  const { top, more } = splitDirectories();
+
   const grid = $('#grid');
   grid.innerHTML = '';
-  const dirs = filteredDirectories();
-  if (dirs.length === 0) {
-    grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: var(--space-xl);">Nothing here yet.</p>';
-    return;
-  }
-  for (const d of dirs) grid.appendChild(cardFor(d));
+  for (const d of top) grid.appendChild(cardFor(d));
+
+  const moreGrid = $('#more-grid');
+  moreGrid.innerHTML = '';
+  for (const d of more) moreGrid.appendChild(cardFor(d));
+  $('#more-count').textContent = more.length;
 }
 
 function easeEmoji(ease) {
@@ -199,14 +206,6 @@ function toast(msg) {
 }
 
 // Event wiring
-$('#filters').addEventListener('click', (e) => {
-  const btn = e.target.closest('.cockpit-filter');
-  if (!btn) return;
-  state.filter = btn.dataset.filter;
-  $$('.cockpit-filter').forEach(b => b.classList.toggle('is-active', b === btn));
-  renderGrid();
-});
-
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
